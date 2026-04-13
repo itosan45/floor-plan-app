@@ -64,7 +64,8 @@ export const resizeImage = (file: File): Promise<{ dataUrl: string, blob: Blob }
  */
 export const captureAndGenerateA4 = async (
     element: HTMLElement,
-    cropRect: { x: number; y: number; w: number; h: number }
+    cropRect: { x: number; y: number; w: number; h: number },
+    options?: ExportOptions
 ): Promise<void> => {
     const captureWidth = element.scrollWidth;
     const captureHeight = element.scrollHeight;

@@ -12,16 +12,16 @@ import { WorkflowBanner } from './components/WorkflowBanner';
 import { TutorialOverlay, ImagePreviewModal, ConfirmTransitionModal, VoiceTranscriptOverlay } from './components/Modals';
 
 import { generateUniqueId } from './utils/common';
-import { resizeImage, loadHtml2Canvas, captureAndGenerateA4 } from './utils/imageProcessing';
+import { resizeImage, loadHtml2Canvas, captureAndGenerateA4, ExportOptions } from './utils/imageProcessing';
 import { calculateMarkersBoundingBox } from './utils/geometry';
 import { useDrawingInteraction } from './hooks/useDrawingInteraction';
 import { useVoiceInteraction } from './hooks/useVoiceInteraction';
 
 export const App: React.FC = () => {
-    onCapture,
-    photoCount,
-    onError
-}) => {
+    const { state, actions } = useEditorState();
+    const containerRef = useRef<HTMLDivElement>(null);
+    const floorPlanRef = useRef<HTMLDivElement>(null);
+
     const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
     const [gridDataUrl, setGridDataUrl] = useState('');
     const [showOrientationWarning, setShowOrientationWarning] = useState(false);
