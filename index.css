@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply antialiased text-white bg-gray-950 font-sans;
+  }
+}
+
+/* Custom styles from index.html moved here */
+.safe-area-pt { padding-top: env(safe-area-inset-top); }
+.safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
+.safe-area-pl { padding-left: env(safe-area-inset-left); }
+.safe-area-pr { padding-right: env(safe-area-inset-right); }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes bounce-in {
+  0% { opacity: 0; transform: scale(0.97) translateY(10px); }
+  70% { opacity: 1; transform: scale(1.01) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+.animate-bounce-in { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+.bg-stripe {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #000,
+    #000 1.5px,
+    #fff 1.5px,
+    #fff 8px
+  );
+  background-size: 11px 11px;
+  border: 1px solid #000;
+}
+
+.bg-mesh {
+  background-image: 
+    linear-gradient(0deg, transparent 1px, rgba(0,0,0,0.15) 1px),
+    linear-gradient(90deg, transparent 1px, rgba(0,0,0,0.15) 1px);
+  background-size: 3px 3px;
+  background-color: #ffffff;
+  border: 1px solid #000;
+}
+
+.cursor-crosshair-forced {
+  cursor: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgNFYyME00IDEySDIwIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjMiLz48cGF0aCBkPSJNMTIgNFYyME00IDEySDIwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=') 12 12, crosshair !important;
+}
+
+.interacting {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Copy of Copy of 0125平面図作成ソフト（音声撮影対応）",
+  "description": "住宅平面図をアップロードし、音声撮影モードで効率的に点検報告を作成できるアプリケーションです。",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
