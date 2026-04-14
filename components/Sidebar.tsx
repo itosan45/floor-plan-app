@@ -1,5 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Camera } from '@capacitor/camera';
 import { 
     MARKER_DEFINITIONS, 
     MARKER_SORT_ORDER, 
@@ -60,12 +62,54 @@ const PhotoLibraryPanel: React.FC<{
     const { photoLibrary, pendingPhotoIds, selectedPhotoId } = state;
     const { addPhotosToLibrary, setSelectedPhotoId, updatePhotoLabel } = actions;
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const isNativePlatform = Capacitor.isNativePlatform();
 
     const presetNames = useMemo(() => {
         return MARKER_SORT_ORDER
             .filter(type => MARKER_DEFINITIONS[type].category === 'name')
             .map(type => MARKER_DEFINITIONS[type].label);
     }, []);
+
+    const handleAddPhotos = async () => {
+        if (!isNativePlatform) {
+            fileInputRef.current?.click();
+            return;
+        }
+
+        try {
+            const result = await Camera.pickImages({
+                quality: 80,
+                limit: 0,
+            });
+
+            const files = await Promise.all(
+                result.photos.map(async (photo, index) => {
+                    const sourceUrl = photo.webPath ?? photo.path;
+                    if (!sourceUrl) {
+                        throw new Error('選択した画像の読み込み元が取得できませんでした');
+                    }
+
+                    const response = await fetch(sourceUrl);
+                    const blob = await response.blob();
+                    const extension = blob.type.includes('png') ? 'png' : 'jpg';
+                    const fileName = photo.webPath?.split('/').pop() ?? `gallery-photo-${Date.now()}-${index + 1}.${extension}`;
+                    return new File([blob], fileName, {
+                        type: blob.type || 'image/jpeg',
+                        lastModified: Date.now(),
+                    });
+                })
+            );
+
+            if (files.length > 0) {
+                await addPhotosToLibrary(files);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '';
+            if (!/cancel/i.test(message)) {
+                console.error('Native gallery import error:', error);
+            }
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-white animate-fade-in border-r border-gray-200 w-72 shadow-xl">
@@ -81,11 +125,11 @@ const PhotoLibraryPanel: React.FC<{
 
             <div className="p-3 border-b">
                 <button 
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => { void handleAddPhotos(); }}
                     className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                     <PhotoIcon className="w-4 h-4"/>
-                    写真を選択して追加
+                    {isNativePlatform ? '端末写真を複数追加' : '写真を選択して追加'}
                 </button>
                 <input 
                     type="file" multiple accept="image/*" 

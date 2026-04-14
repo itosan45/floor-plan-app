@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Marker, Photo } from '../types';
 import { EditorState } from '../hooks/useEditorState';
 import { InteractiveMarker, MarkerRenderer } from './Marker';
@@ -117,6 +117,67 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
         objectFit: 'contain'
     };
 
+    const rectangleBorderMasks = useMemo(() => {
+        const epsilon = 0.001;
+        const rectangleMarkers = markers.filter(
+            (marker) =>
+                marker.type === 'rectangle_outline' &&
+                typeof marker.width === 'number' &&
+                typeof marker.height === 'number'
+        );
+
+        const masks = new Map<string, { top: boolean; right: boolean; bottom: boolean; left: boolean }>();
+        rectangleMarkers.forEach((marker) => {
+            masks.set(marker.id, { top: true, right: true, bottom: true, left: true });
+        });
+
+        for (let i = 0; i < rectangleMarkers.length; i += 1) {
+            const current = rectangleMarkers[i];
+            const currentMask = masks.get(current.id);
+            if (!currentMask) continue;
+
+            const currentRight = current.x + (current.width ?? 0);
+            const currentBottom = current.y + (current.height ?? 0);
+
+            for (let j = 0; j < rectangleMarkers.length; j += 1) {
+                if (i === j) continue;
+
+                const other = rectangleMarkers[j];
+                const otherLeft = other.x;
+                const otherTop = other.y;
+                const otherRight = other.x + (other.width ?? 0);
+                const otherBottom = other.y + (other.height ?? 0);
+
+                const sameVerticalSpan =
+                    Math.abs(current.y - otherTop) <= epsilon &&
+                    Math.abs(currentBottom - otherBottom) <= epsilon;
+                const sameHorizontalSpan =
+                    Math.abs(current.x - otherLeft) <= epsilon &&
+                    Math.abs(currentRight - otherRight) <= epsilon;
+
+                if (sameVerticalSpan) {
+                    if (Math.abs(currentRight - otherLeft) <= epsilon) {
+                        currentMask.right = false;
+                    }
+                    if (Math.abs(current.x - otherRight) <= epsilon) {
+                        currentMask.left = false;
+                    }
+                }
+
+                if (sameHorizontalSpan) {
+                    if (Math.abs(currentBottom - otherTop) <= epsilon) {
+                        currentMask.bottom = false;
+                    }
+                    if (Math.abs(current.y - otherBottom) <= epsilon) {
+                        currentMask.top = false;
+                    }
+                }
+            }
+        }
+
+        return masks;
+    }, [markers]);
+
     return (
         <div 
             className={`flex-1 relative overflow-hidden bg-gray-900 ${isInteracting ? 'interacting' : ''}`} 
@@ -164,6 +225,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
                         floorPlanAspectRatio={floorPlanAspectRatio}
                         isGridMode={isGridMode}
                         gridSize={state.gridSize}
+                        areaBorderMask={rectangleBorderMasks.get(marker.id)}
                     />
                 ))}
                 

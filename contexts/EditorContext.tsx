@@ -84,7 +84,7 @@ export interface EditorActions {
     exportStateToJson: () => void;
     importStateFromJson: (file: File) => Promise<void>;
     resetEditor: () => void;
-    addPhotosToLibrary: (files: FileList) => Promise<void>;
+    addPhotosToLibrary: (files: FileList | File[]) => Promise<void>;
     setSelectedPhotoId: (id: string | null) => void;
     updatePhotoLabel: (id: string, label: string) => void;
     startTutorial: () => void;
@@ -226,13 +226,14 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     }, [workflowStep]);
 
-    const addPhotosToLibrary = useCallback(async (files: FileList) => {
-        showStatus(`${files.length}枚の写真を読み込み中...`, "info");
+    const addPhotosToLibrary = useCallback(async (files: FileList | File[]) => {
+        const fileList = Array.from(files);
+        showStatus(`${fileList.length}枚の写真を読み込み中...`, "info");
         const newIds: string[] = [];
         const newPhotos: Record<string, Photo> = {};
-        for (let i = 0; i < files.length; i++) {
+        for (let i = 0; i < fileList.length; i++) {
             try {
-                const file = files[i];
+                const file = fileList[i];
                 const { dataUrl, blob } = await resizeImage(file);
                 const id = generateUniqueId();
                 newIds.push(id);

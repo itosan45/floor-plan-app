@@ -78,6 +78,21 @@ export const resizeImage = (file: File): Promise<{ dataUrl: string, blob: Blob }
   });
 };
 
+export const blobToDataUrl = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error('Failed to convert blob to data URL'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+    reader.readAsDataURL(blob);
+  });
+};
+
 /**
  * html2canvasでキャプチャし、Blobとして保存する
  */

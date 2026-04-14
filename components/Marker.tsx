@@ -15,6 +15,12 @@ interface MarkerComponentProps {
     previewSize?: number;
     isPreview?: boolean;
     uiMode?: 'office' | 'field';
+    areaBorderMask?: {
+        top: boolean;
+        right: boolean;
+        bottom: boolean;
+        left: boolean;
+    };
 }
 
 const POINT_BASE_SIZE = 28;
@@ -197,7 +203,7 @@ const CrackLineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGrid
     );
 };
 
-const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode, gridSize, previewSize, isPreview, uiMode }) => {
+const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode, gridSize, previewSize, isPreview, uiMode, areaBorderMask }) => {
     const isImpassable = marker.type === 'impassable_area';
     const isDrilling = marker.type === 'drilling_injection';
     const isAccessOpening = marker.type === 'access_opening';
@@ -234,7 +240,10 @@ const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode,
                 boxSizing: 'border-box',
                 backgroundColor: bgColor,
                 borderColor: isImpassable ? 'transparent' : (marker.color || (isDrilling ? '#3b82f6' : '#000')),
-                borderWidth: `${borderWidth}px`,
+                borderTopWidth: `${areaBorderMask?.top ?? true ? borderWidth : 0}px`,
+                borderRightWidth: `${areaBorderMask?.right ?? true ? borderWidth : 0}px`,
+                borderBottomWidth: `${areaBorderMask?.bottom ?? true ? borderWidth : 0}px`,
+                borderLeftWidth: `${areaBorderMask?.left ?? true ? borderWidth : 0}px`,
                 minHeight: previewSize ? '20px' : 'auto',
                 opacity: isPreview ? 0.7 : 1
             }} 
@@ -348,8 +357,14 @@ export const InteractiveMarker: React.FC<{
     floorPlanAspectRatio: number | null;
     isGridMode: boolean;
     gridSize: number;
+    areaBorderMask?: {
+        top: boolean;
+        right: boolean;
+        bottom: boolean;
+        left: boolean;
+    };
 }> = ({
-    marker, toolMode, isSelected, onSelect, onUpdateMarker, onDragStart, onDragEnd, isDrawing, isPhotographyMode, containerWidth, floorPlanAspectRatio, isGridMode, gridSize
+    marker, toolMode, isSelected, onSelect, onUpdateMarker, onDragStart, onDragEnd, isDrawing, isPhotographyMode, containerWidth, floorPlanAspectRatio, isGridMode, gridSize, areaBorderMask
 }) => {
     const { state } = useEditorContext();
     const isInteracting = useRef(false);
@@ -446,6 +461,7 @@ export const InteractiveMarker: React.FC<{
                 gridSize={gridSize} 
                 isSelected={isSelected} 
                 uiMode={state.uiMode}
+                areaBorderMask={areaBorderMask}
             />
         </div>
     );
