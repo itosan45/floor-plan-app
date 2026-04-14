@@ -24,8 +24,6 @@ export type MarkerType =
   // New construction marker types
   'impassable_area' | 'spray_arrow' | 'chipping_expand' | 'chipping_full' |
   'drilling_injection' | 'agitator_fan' | 'blower_fan' | 'timer' | 'bamboo_charcoal' |
-  // Room Drafting
-  'room' |
   // Name/Annotation
   'comment_box' | 'rectangle_outline' |
   // Fixed Text Markers
@@ -53,8 +51,6 @@ export type Marker = {
   length?: number;   
   width?: number;    
   height?: number;   
-  gridW?: number; 
-  gridH?: number; 
   text?: string;
   comment?: string;
   targetX?: number; 
@@ -68,7 +64,6 @@ export type Marker = {
 export type TutorialStep = 
   | 'none'
   | 'welcome'
-  | 'place_room'
   | 'place_access'
   | 'underfloor_photo'
   | 'finish';

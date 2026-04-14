@@ -37,30 +37,8 @@ const getMarkerZIndex = (type: MarkerType, isSelected: boolean): number => {
     // 選択中のマーカーは常に最前面(200以上)
     if (isSelected) return 300;
     if (type.startsWith('text_') || type === 'comment_box' || type === 'photo') return 30;
-    if (type === 'access_opening' || type === 'ventilation_opening' || type === 'crack_line' || type === 'room') return 25;
+    if (type === 'access_opening' || type === 'ventilation_opening' || type === 'crack_line') return 25;
     return 10;
-};
-
-const RoomMarker: React.FC<MarkerComponentProps> = ({ marker, isPreview, uiMode }) => {
-    const fontSize = uiMode === 'field' ? '15px' : '11px';
-    return (
-        <div 
-            className={`w-full h-full border-2 bg-white shadow-md flex items-center justify-center relative overflow-hidden transition-colors ${isPreview ? 'opacity-50 border-dashed border-indigo-500' : 'border-gray-900 group-hover:border-indigo-500'}`}
-            style={{ 
-                backgroundColor: isPreview ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.95)',
-            }}
-        >
-            <div className="font-black text-gray-800 text-center select-none pointer-events-none p-1 break-all leading-tight z-10" style={{ fontSize }}>
-                {marker.text}
-                {!isPreview && uiMode !== 'field' && (
-                    <div className="text-[9px] opacity-40 font-bold mt-0.5">
-                        {marker.gridW}×{marker.gridH}
-                    </div>
-                )}
-            </div>
-            <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[linear-gradient(90deg,transparent_48%,#000_50%,transparent_52%),linear-gradient(0deg,transparent_48%,#000_50%,transparent_52%)] bg-[size:25%_25%]" />
-        </div>
-    );
 };
 
 const CommentBoxMarker: React.FC<MarkerComponentProps> = ({ marker, scale, previewSize, isPreview, uiMode }) => {
@@ -193,7 +171,7 @@ const CrackLineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGrid
     const modeS = uiMode === 'field' ? 1.5 : 1.0;
     const width = previewSize ? '100%' : (isGridMode && gridSize ? (marker.length ?? 1) * gridSize : (marker.length ?? 1) * 60 * scale);
     const height = previewSize ? 14 : (isGridMode && gridSize ? gridSize * 0.5 : 16 * scale * modeS);
-    const strokeWidth = previewSize ? 3 : (marker.lineThickness ? marker.lineThickness * scale : 5 * scale * modeS);
+    const strokeWidth = previewSize ? 3 : (marker.lineThickness ? marker.lineThickness * scale * modeS : 5 * scale * modeS);
     
     return (
         <div style={{ width, height: `${height}px`, transform: previewSize ? 'none' : `rotate(${marker.rotation ?? 0}deg)`, transformOrigin: 'left center', opacity: isPreview ? 0.4 : 1 }}>
@@ -204,7 +182,7 @@ const CrackLineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGrid
     );
 };
 
-const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, previewSize, isPreview, uiMode }) => {
+const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode, gridSize, previewSize, isPreview, uiMode }) => {
     const isImpassable = marker.type === 'impassable_area';
     const isDrilling = marker.type === 'drilling_injection';
     const isAccessOpening = marker.type === 'access_opening';
@@ -220,15 +198,32 @@ const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, previewSize, isPre
     }
 
     const patternClass = isDrilling ? 'bg-stripe' : isVentilation ? 'bg-mesh' : '';
-    const borderClass = isImpassable ? 'border-0' : 'border-2';
+    const borderStyleClass = isImpassable ? 'border-none' : (isPreview ? 'border-dashed border-indigo-500' : 'border-solid');
+
+    const modeS = uiMode === 'field' ? 1.6 : 1.0;
+    let borderWidth = isImpassable ? 0 : uiMode === 'field' ? 4 : 2;
+    
+    if (!isImpassable && !previewSize) {
+        if (marker.lineThickness) {
+            borderWidth = marker.lineThickness * scale * modeS;
+        } else {
+            if (isGridMode && gridSize) {
+                borderWidth = gridSize * 0.2 * modeS;
+            } else {
+                borderWidth = LINE_BASE_HEIGHT * scale * modeS;
+            }
+        }
+    } else if (previewSize) {
+        borderWidth = 2;
+    }
 
     return (
         <div 
-            className={`w-full h-full ${patternClass} ${borderClass} ${isPreview ? 'border-dashed border-indigo-500' : ''}`} 
+            className={`w-full h-full ${patternClass} ${borderStyleClass}`} 
             style={{ 
                 backgroundColor: bgColor,
                 borderColor: isImpassable ? 'transparent' : (marker.color || (isDrilling ? '#3b82f6' : '#000')),
-                borderWidth: isImpassable ? 0 : uiMode === 'field' ? 4 : 2,
+                borderWidth: `${borderWidth}px`,
                 minHeight: previewSize ? '20px' : 'auto',
                 opacity: isPreview ? 0.7 : 1
             }} 
@@ -266,7 +261,6 @@ const SprayArrowMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGri
 export const MarkerRenderer: React.FC<MarkerComponentProps> = (props) => {
     const { marker } = props;
     switch (marker.type) {
-        case 'room': return <RoomMarker {...props} />;
         case 'photo': return <PhotoMarker {...props} />;
         case 'intrusion': return <PointIconMarker {...props} label="×" color="text-red-600" />;
         case 'presence': return <PointIconMarker {...props} label="×" color="text-red-700 font-black" />;
@@ -341,9 +335,8 @@ export const InteractiveMarker: React.FC<{
     floorPlanAspectRatio: number | null;
     isGridMode: boolean;
     gridSize: number;
-    markers: Marker[];
 }> = ({
-    marker, toolMode, isSelected, onSelect, onUpdateMarker, onDragStart, onDragEnd, isDrawing, isPhotographyMode, containerWidth, floorPlanAspectRatio, isGridMode, gridSize, markers
+    marker, toolMode, isSelected, onSelect, onUpdateMarker, onDragStart, onDragEnd, isDrawing, isPhotographyMode, containerWidth, floorPlanAspectRatio, isGridMode, gridSize
 }) => {
     const { state } = useEditorContext();
     const isInteracting = useRef(false);
@@ -351,21 +344,17 @@ export const InteractiveMarker: React.FC<{
     const initialMarkerPos = useRef<{ x: number, y: number } | null>(null);
     const hasDragged = useRef(false);
 
+    const logicalHeight = isGridMode ? containerWidth : (containerWidth / (floorPlanAspectRatio || 1));
+
     const left = `${marker.x * 100}%`;
     const top = `${marker.y * 100}%`;
     
     let widthVal = marker.width !== undefined ? `${marker.width * 100}%` : undefined;
     let heightVal = marker.height !== undefined ? `${marker.height * 100}%` : undefined;
 
-    if (isGridMode && gridSize && marker.gridW !== undefined && marker.gridH !== undefined) {
-        const cellRatio = gridSize / containerWidth;
-        widthVal = `${marker.gridW * cellRatio * 100}%`;
-        heightVal = `${marker.gridH * cellRatio * 100}%`;
-    }
-    
     const def = MARKER_DEFINITIONS[marker.type];
     const isLine = def?.interaction === 'line';
-    const isArea = marker.width !== undefined || marker.height !== undefined || marker.type === 'room';
+    const isArea = marker.width !== undefined || marker.height !== undefined;
     
     const transformStr = isArea ? 'none' : (isLine ? 'translate(0, -50%)' : 'translate(-50%, -50%)');
     const zIndex = getMarkerZIndex(marker.type, isSelected);
@@ -393,35 +382,15 @@ export const InteractiveMarker: React.FC<{
         if (!hasDragged.current && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
         
         hasDragged.current = true;
-        const logicalHeight = isGridMode ? containerWidth : (containerWidth / (floorPlanAspectRatio || 1));
         
         let newX = initialMarkerPos.current.x + dx / containerWidth;
         let newY = initialMarkerPos.current.y + dy / logicalHeight;
         
-        const shouldSnap = def?.shouldSnap || marker.type === 'room';
+        const shouldSnap = def?.shouldSnap;
 
         if (isGridMode && shouldSnap) {
-            newX = snapToGrid(newX, containerWidth, gridSize, true, 2);
-            newY = snapToGrid(newY, containerWidth, gridSize, true, 2);
-
-            if (marker.type === 'room') {
-                const cellRatio = gridSize / containerWidth;
-                const snapThreshold = cellRatio * 0.5;
-                markers.forEach((m: Marker) => {
-                    if (m.id === marker.id || m.type !== 'room') return;
-                    const mX2 = m.x + (m.gridW ?? 0) * cellRatio;
-                    const mY2 = m.y + (m.gridH ?? 0) * cellRatio;
-                    const currentX2 = newX + (marker.gridW ?? 0) * cellRatio;
-                    const currentY2 = newY + (marker.gridH ?? 0) * cellRatio;
-
-                    if (Math.abs(newX - mX2) < snapThreshold) newX = mX2;
-                    if (Math.abs(currentX2 - m.x) < snapThreshold) newX = m.x - (marker.gridW ?? 0) * cellRatio;
-                    if (Math.abs(newX - m.x) < snapThreshold) newX = m.x;
-                    if (Math.abs(newY - mY2) < snapThreshold) newY = mY2;
-                    if (Math.abs(currentY2 - m.y) < snapThreshold) newY = m.y - (marker.gridH ?? 0) * cellRatio;
-                    if (Math.abs(newY - m.y) < snapThreshold) newY = m.y;
-                });
-            }
+            newX = snapToGrid(newX, containerWidth, gridSize, 2);
+            newY = snapToGrid(newY, logicalHeight, gridSize, 2);
         }
         
         onUpdateMarker(marker.id, { x: newX, y: newY });
@@ -434,10 +403,6 @@ export const InteractiveMarker: React.FC<{
         
         // クリックとドラッグの厳密な判定
         if (!hasDragged.current) {
-            // 既に選択されている状態でのみ、部屋の回転を許可する（誤操作防止）
-            if (isSelected && marker.type === 'room') {
-                onUpdateMarker(marker.id, { gridW: marker.gridH, gridH: marker.gridW });
-            }
             onSelect(marker.id);
         }
         onDragEnd(hasDragged.current);

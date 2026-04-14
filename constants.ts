@@ -2,7 +2,7 @@
 import { MarkerType } from './types';
 
 export type MarkerCategory = 'inspection' | 'construction' | 'name';
-export type InteractionType = 'point' | 'line' | 'area' | 'photo_drag' | 'room_place';
+export type InteractionType = 'point' | 'line' | 'area' | 'photo_drag';
 
 // Grid configuration
 export const GRID_CELL_COUNT = 50;
@@ -35,8 +35,6 @@ export const MARKER_DEFINITIONS: Record<MarkerType, MarkerDef> = {
     access_opening: { label: '人通口', category: 'inspection', interaction: 'area', shouldSnap: true },
     ventilation_opening: { label: '通気口(網)', category: 'inspection', interaction: 'area', shouldSnap: true },
     crack_line: { label: 'クラック(波線)', category: 'inspection', interaction: 'line', isFree: true, shouldSnap: false },
-    
-    room: { label: '部屋', category: 'construction', interaction: 'room_place', shouldSnap: true },
 
     rectangle_outline: { label: '四角形(枠)', category: 'inspection', interaction: 'area', shouldSnap: true },
 
@@ -112,7 +110,6 @@ export const MARKER_DEFINITIONS: Record<MarkerType, MarkerDef> = {
 };
 
 export const MARKER_SORT_ORDER: MarkerType[] = [
-    'room',
     'rectangle_outline', 
     'access_opening',
     'foundation_line', 

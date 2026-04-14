@@ -1,5 +1,5 @@
 
-import { Marker, MarkerType } from '../types';
+import { Marker } from '../types';
 import { MARKER_DEFINITIONS, BASE_CONTAINER_WIDTH } from '../constants';
 
 export interface Rect {
@@ -36,13 +36,9 @@ export const calculateMarkersBoundingBox = (
 
     markers.forEach(m => {
         const def = MARKER_DEFINITIONS[m.type];
-        let points: {x: number, y: number}[] = [{ x: m.x, y: m.y }];
+        const points: {x: number, y: number}[] = [{ x: m.x, y: m.y }];
 
-        if (m.type === 'room' && m.gridW && m.gridH) {
-            const rw = (m.gridW * gridSize) / canvasWidth;
-            const rh = (m.gridH * gridSize) / canvasHeight;
-            points.push({ x: m.x + rw, y: m.y + rh });
-        } else if (def.interaction === 'area' && m.width && m.height) {
+        if (def.interaction === 'area' && m.width && m.height) {
             points.push({ x: m.x + m.width, y: m.y + m.height });
         } else if (def.interaction === 'line' && m.length != null && m.rotation != null) {
             const angleRad = (m.rotation * Math.PI) / 180;

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { WorkflowStep } from '../types';
-import { CheckIcon, SparklesIcon, BoltIcon, ChevronRightIcon } from './icons';
+import { CheckIcon, ChevronRightIcon } from './icons';
 import { useEditorContext } from '../contexts/EditorContext';
 
 interface WorkflowBannerProps {
@@ -9,10 +9,9 @@ interface WorkflowBannerProps {
     onNext: () => void;
     canNext: boolean;
     isTutorial?: boolean;
-    onExport: () => void;
 }
 
-export const WorkflowBanner: React.FC<WorkflowBannerProps> = ({ step, onNext, canNext, isTutorial, onExport }) => {
+export const WorkflowBanner: React.FC<WorkflowBannerProps> = ({ step, onNext, canNext, isTutorial }) => {
     const { actions } = useEditorContext();
     const steps: { key: WorkflowStep; label: string; instruction: string }[] = [
         { key: 'preparation', label: '図面', instruction: '平面図読み込み or 方眼紙' },
@@ -23,9 +22,9 @@ export const WorkflowBanner: React.FC<WorkflowBannerProps> = ({ step, onNext, ca
     ];
 
     const currentIndex = steps.findIndex(s => s.key === step);
-    const currentStepData = steps[currentIndex];
 
     const handleStepClick = (targetStep: WorkflowStep) => {
+        if (isTutorial) return;
         actions.setWorkflowStep(targetStep);
     };
 
@@ -66,15 +65,6 @@ export const WorkflowBanner: React.FC<WorkflowBannerProps> = ({ step, onNext, ca
                         {step === 'floor_drafting' && !isTutorial ? '床下へ' : (currentIndex === steps.length - 1 ? '完了' : '次へ')}
                     </span>
                     <ChevronRightIcon className="w-4 h-4" />
-                </button>
-
-                {/* Quick Export Button */}
-                <button 
-                    onClick={onExport}
-                    className="ml-2 w-10 h-10 bg-indigo-600/20 text-indigo-400 border border-indigo-400/30 rounded-xl flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all shadow-lg active:scale-90"
-                    title="現在の状態で保存・出力"
-                >
-                    <BoltIcon className="w-5 h-5 font-black" />
                 </button>
             </div>
         </div>

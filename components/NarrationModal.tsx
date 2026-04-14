@@ -1,9 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { EditorState, EditorActions } from '../hooks/useEditorState';
-import { XMarkIcon, SparklesIcon, MicrophoneIcon, SpeakerIcon, DownloadIcon, CheckIcon, TrashIcon } from './icons';
+import { XMarkIcon, SparklesIcon, MicrophoneIcon, DownloadIcon, CheckIcon, TrashIcon } from './icons';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { decodeBase64, decodeRawPcm } from '../utils/audio';
+import { MARKER_DEFINITIONS } from '../constants';
 
 interface NarrationModalProps {
     isOpen: boolean;
@@ -61,7 +62,7 @@ export const NarrationModal: React.FC<NarrationModalProps> = ({ isOpen, state, a
                 return `- ${def?.label || m.type}: ${m.text || ''} ${m.comment || ''}`;
             }).join('\n');
 
-            const personaVoiceMap = {
+            const personaVoiceMap: Record<'male' | 'female' | 'child', string> = {
                 male: 'Charon', // Strong professional male
                 female: 'Kore', // Friendly clear female
                 child: 'Puck'   // Cheerful child

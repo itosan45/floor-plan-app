@@ -1,6 +1,4 @@
 
-import React from 'react';
-
 type IconProps = { className?: string; strokeWidth?: number };
 
 export const CameraIcon = ({ className = "h-6 w-6", strokeWidth = 2 }: IconProps) => (

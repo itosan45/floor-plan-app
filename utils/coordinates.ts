@@ -1,6 +1,4 @@
 
-import { GRID_CELL_COUNT } from '../constants';
-
 /**
  * 画面上のクライアント座標(clientX, clientY)を、指定した要素内の相対座標(0-1)に変換する
  */
@@ -35,16 +33,15 @@ export const pixelToRelative = (px: number, totalPixel: number): number => px / 
  */
 export const snapToGrid = (
     val: number, 
-    currentCanvasWidth: number, 
+    totalPixel: number, 
     gridSize: number, 
-    isGridMode: boolean, 
     subdivisions = 1
 ): number => {
     // gridSize（ピクセル）ベースで相対座標ステップを計算
-    const size = (gridSize && gridSize > 0) ? gridSize : (currentCanvasWidth / GRID_CELL_COUNT);
+    const size = (gridSize && gridSize > 0) ? gridSize : 20; // fallback
     
     // 相対座標(0-1)におけるステップ幅を計算
-    const step = (size / currentCanvasWidth) / subdivisions;
+    const step = (size / totalPixel) / subdivisions;
         
     if (step === 0) return val;
     return Math.round(val / step) * step;

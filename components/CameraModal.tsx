@@ -1,5 +1,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Photo } from '../types';
 import { generateUniqueId } from '../utils/common';
 import { XMarkIcon, CameraIcon } from './icons';
@@ -12,16 +14,15 @@ interface CameraModalProps {
     isUnderfloorMode?: boolean;
     isManualCameraMode?: boolean;
     initialData?: { x: number; y: number; rotation: number; length: number } | null;
-    onError?: (msg: string) => void;
 }
 
 export const CameraModal: React.FC<CameraModalProps> = ({
     isOpen,
     onClose,
     onCapture,
-    photoCount,
-    onError
+    photoCount
 }) => {
+    const isNativePlatform = Capacitor.isNativePlatform();
     const [isCapturing, setIsCapturing] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,12 +30,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            startCamera();
+            if (!isNativePlatform) {
+                void startCamera();
+            }
         } else {
             stopCamera();
         }
         return () => stopCamera();
-    }, [isOpen]);
+    }, [isOpen, isNativePlatform]);
 
     const startCamera = async () => {
         try {
@@ -52,9 +55,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             }
         } catch (err) {
             console.error("Camera access error:", err);
-            const msg = "カメラの起動に失敗しました。アクセス許可を確認してください。";
-            if (onError) onError(msg);
-            else alert(msg);
+            alert("カメラの起動に失敗しました。ブラウザの設定で許可されているか確認してください。");
         }
     };
 
@@ -65,7 +66,49 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         }
     };
 
+    const capturePhotoNative = useCallback(async () => {
+        if (isCapturing) return;
+        setIsCapturing(true);
+
+        try {
+            const result = await Camera.getPhoto({
+                source: CameraSource.Camera,
+                resultType: CameraResultType.DataUrl,
+                quality: 80,
+            });
+
+            if (!result.dataUrl) {
+                throw new Error('撮影結果の取得に失敗しました');
+            }
+
+            const blob = await fetch(result.dataUrl).then(response => response.blob());
+            const label = `${photoCount + 1} 点検箇所`;
+
+            onCapture({
+                id: generateUniqueId(),
+                blob,
+                dataUrl: result.dataUrl,
+                label,
+                timestamp: new Date().toLocaleString('ja-JP'),
+            });
+            onClose();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : '';
+            if (!/cancel/i.test(message)) {
+                console.error('Native camera capture error:', err);
+                alert('カメラの起動に失敗しました。端末の権限設定を確認してください。');
+            }
+        } finally {
+            setIsCapturing(false);
+        }
+    }, [isCapturing, onCapture, onClose, photoCount]);
+
     const capturePhoto = useCallback(() => {
+        if (isNativePlatform) {
+            void capturePhotoNative();
+            return;
+        }
+
         if (!videoRef.current || !canvasRef.current || isCapturing) return;
         setIsCapturing(true);
 
@@ -85,20 +128,25 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+            setIsCapturing(false);
+            return;
+        }
 
         ctx.drawImage(video, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         
         canvas.toBlob((blob) => {
-            if (!blob) return;
-
-            const blobUrl = URL.createObjectURL(blob);
+            if (!blob) {
+                setIsCapturing(false);
+                return;
+            }
             const label = `${photoCount + 1} 点検箇所`;
 
             const newPhoto: Photo = {
                 id: generateUniqueId(),
                 blob: blob,
-                dataUrl: blobUrl,
+                dataUrl,
                 label: label,
                 timestamp: new Date().toLocaleString('ja-JP'),
             };
@@ -108,7 +156,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             setIsCapturing(false);
         }, 'image/jpeg', 0.8);
 
-    }, [isCapturing, onCapture, photoCount]);
+    }, [capturePhotoNative, isCapturing, isNativePlatform, onCapture, photoCount]);
 
     if (!isOpen) return null;
 
@@ -129,19 +177,35 @@ export const CameraModal: React.FC<CameraModalProps> = ({
 
             {/* Video Viewport */}
             <div className="flex-1 relative flex items-center justify-center bg-gray-900">
-                <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted
-                    className="w-full h-full object-cover" // 全画面表示
-                />
+                {isNativePlatform ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-8 text-center text-white">
+                        <div className="rounded-full bg-white/10 p-6">
+                            <CameraIcon className="h-16 w-16 text-white" />
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-2xl font-black tracking-tight">システムカメラを起動</p>
+                            <p className="text-sm font-bold text-white/70">
+                                シャッターボタンを押すと端末のカメラを開きます。
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        muted
+                        className="w-full h-full object-cover"
+                    />
+                )}
                 <canvas ref={canvasRef} className="hidden" />
                 
                 {/* Visual Guide Overlay */}
-                <div className="absolute inset-0 border-[60px] border-black/20 pointer-events-none">
-                    <div className="w-full h-full border-2 border-white/20 rounded-lg" />
-                </div>
+                {!isNativePlatform && (
+                    <div className="absolute inset-0 border-[60px] border-black/20 pointer-events-none">
+                        <div className="w-full h-full border-2 border-white/20 rounded-lg" />
+                    </div>
+                )}
             </div>
 
             {/* Controls */}

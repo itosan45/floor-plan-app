@@ -9,8 +9,8 @@ import { MarkerType, Marker } from '../types';
 import { EditorState, EditorActions } from '../hooks/useEditorState';
 import { 
     Spinner,
-    ClipboardIcon, HammerIcon, TagIcon, MicrophoneIcon, PhotoIcon, XMarkIcon,
-    CameraIcon, BoltIcon, PencilIcon, TrashIcon, SparklesIcon, QuestionMarkCircleIcon, ChevronRightIcon
+    PhotoIcon, XMarkIcon,
+    BoltIcon, DownloadIcon
 } from './icons';
 import { MarkerDisplay } from './Marker';
 
@@ -90,7 +90,10 @@ const PhotoLibraryPanel: React.FC<{
                 <input 
                     type="file" multiple accept="image/*" 
                     className="hidden" ref={fileInputRef}
-                    onChange={(e) => e.target.files && addPhotosToLibrary(e.target.files)} 
+                    onChange={(e) => {
+                        if (e.target.files) addPhotosToLibrary(e.target.files);
+                        e.target.value = '';
+                    }} 
                 />
             </div>
 
@@ -171,7 +174,7 @@ const MarkerPaletteOverlay: React.FC<{
     onSelectMarker: (type: MarkerType) => void;
 }> = ({ isOpen, onClose, activeTab, currentMarkerType, onSelectMarker }) => {
     if (!isOpen) return null;
-    const categoryLabels: Record<MarkerCategory, string> = { inspection: '点検', construction: '施工', name: '名称' };
+    const categoryLabels: Record<MarkerCategory, string> = { inspection: '点検', construction: '構造', name: '名称' };
     return (
         <div className="fixed inset-0 z-[100]" onPointerDown={onClose}>
             <div className="absolute left-16 top-4 bottom-4 w-64 bg-white shadow-2xl rounded-2xl border border-gray-200 flex flex-col animate-bounce-in overflow-hidden" onPointerDown={e => e.stopPropagation()}>
@@ -202,19 +205,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, actions, markerActions,
     const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-
-    const { activeTab, currentMarkerType, currentLineColor, selectedMarkerId, isExporting, appMode, isGridMode, pendingPhotoIds, workflowStep } = state;
-    const { setActiveTab, setCurrentMarkerType, setAppMode, setCurrentLineColor, showStatus, setActiveModal, setWorkflowStep } = actions;
+    const { activeTab, currentMarkerType, currentLineColor, selectedMarkerId, isExporting, appMode, pendingPhotoIds, markers, photoLibrary } = state;
+    const { setActiveTab, setCurrentMarkerType, setAppMode, setCurrentLineColor, showStatus, setActiveModal, exportStateToJson } = actions;
     const { updateMarker } = markerActions;
-
-    const WORKFLOW_STEPS: { key: any; label: string }[] = [
-        { key: 'preparation', label: '1' },
-        { key: 'floor_drafting', label: '2' },
-        { key: 'entry_setup', label: '3' },
-        { key: 'underfloor', label: '4' },
-        { key: 'completion', label: '5' },
-    ];
+    const placedPhotoCount = markers.filter(marker => marker.type === 'photo' && !!marker.photoId && !!photoLibrary[marker.photoId]).length;
 
     const handleCategoryClick = (catId: MarkerCategory) => {
         setIsLibraryOpen(false);
@@ -239,81 +233,71 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, actions, markerActions,
         <>
             <div className="flex-shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col z-50 w-14">
                 <div className="w-14 flex flex-col h-full overflow-hidden">
-                    <div className="p-1.5 border-b border-gray-800 flex flex-col gap-3 py-4 items-center">
-                        <button onClick={() => setActiveModal('report')} className="w-11 h-11 rounded-xl flex items-center justify-center bg-indigo-600 text-white font-black text-xl shadow-lg active:scale-95 transition-all" title="レポートを表示">報</button>
-                        
-                        {/* 1-5 Step Selector (Replacing the Top Banner) */}
-                        <div className="flex flex-col gap-1.5 py-2 border-y border-white/5 w-full items-center">
-                            {WORKFLOW_STEPS.map((s, idx) => (
-                                <button 
-                                    key={s.key} 
-                                    onClick={() => setWorkflowStep(s.key)}
-                                    className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black transition-all border ${workflowStep === s.key ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-gray-900 border-gray-800 text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    {s.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <button 
-                                onClick={() => { setIsLibraryOpen(!isLibraryOpen); setIsPaletteOpen(false); }}
-                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all border relative ${isLibraryOpen ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-gray-900 border-gray-800 text-gray-500'}`}
-                                title="写真ライブラリ"
-                            >
-                                <PhotoIcon className="w-6 h-6" />
-                                {pendingPhotoIds.length > 0 && (
-                                    <div className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
-                                        {pendingPhotoIds.length}
-                                    </div>
-                                )}
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    const nextMode = isGridMode ? 'drafting-voice' : 'inspection-voice';
-                                    setAppMode(appMode === nextMode ? 'pan' : nextMode);
-                                }}
-                                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all border ${appMode.includes('voice') ? 'bg-red-600 border-red-400 text-white animate-pulse' : 'bg-gray-900 border-gray-800 text-gray-500'}`}
-                                title="音声入力モード"
-                            >
-                                {isGridMode ? <SparklesIcon className="w-6 h-6" /> : <MicrophoneIcon className="w-6 h-6" />}
-                            </button>
-                        </div>
-                    </div>
                     <div className="flex-1 flex flex-col items-center py-4 gap-4 overflow-y-auto custom-scrollbar">
-                        <CategoryButton id="inspection" icon={ClipboardIcon} active={activeTab === 'inspection' && isPaletteOpen} onClick={handleCategoryClick} />
-                        <CategoryButton id="construction" icon={HammerIcon} active={activeTab === 'construction' && isPaletteOpen} onClick={handleCategoryClick} />
-                        <CategoryButton id="name" icon={TagIcon} active={activeTab === 'name' && isPaletteOpen} onClick={handleCategoryClick} />
-                    </div>
-                    <div className="p-1.5 border-t border-gray-800 bg-gray-950 flex flex-col gap-2 pb-6 items-center relative">
-                        {isExportMenuOpen && (
-                            <div className="absolute bottom-full mb-4 left-14 w-48 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-2 animate-bounce-in">
-                                <p className="text-[9px] font-black text-gray-500 uppercase px-3 py-1 mb-1 tracking-widest">保存形式を選択</p>
-                                <button onClick={() => { setIsExportMenuOpen(false); performCropAndExport({ rawDiagram: false, format: 'jpg' }); }} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-gray-800 rounded-xl transition-colors flex items-center justify-between">
-                                    A4報告用 (.jpg) <ChevronRightIcon className="w-3 h-3 text-indigo-500" />
-                                </button>
-                                <button onClick={() => { setIsExportMenuOpen(false); performCropAndExport({ rawDiagram: true, format: 'jpg' }); }} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-gray-800 rounded-xl transition-colors flex items-center justify-between">
-                                    図面のみ (.jpg) <ChevronRightIcon className="w-3 h-3 text-indigo-500" />
-                                </button>
-                                <button onClick={() => { setIsExportMenuOpen(false); performCropAndExport({ rawDiagram: true, format: 'png' }); }} className="w-full text-left px-4 py-3 text-xs font-bold hover:bg-gray-800 rounded-xl transition-colors flex items-center justify-between border-t border-white/5 mt-1">
-                                    高画質図面 (.png) <ChevronRightIcon className="w-3 h-3 text-indigo-500" />
-                                </button>
-                            </div>
-                        )}
-                        <button 
-                            onClick={() => setActiveModal('help')}
-                            className="w-11 h-11 rounded-xl flex items-center justify-center bg-gray-800 text-gray-400 hover:text-white transition-all active:scale-95"
-                            title="マニュアル"
+                        <button onClick={() => setActiveModal('report')} className="w-11 h-11 rounded-xl flex items-center justify-center bg-indigo-600 text-white font-black text-xl shadow-lg active:scale-95 transition-all" title="レポートを表示">報</button>
+                        <button
+                            onClick={() => {
+                                if (placedPhotoCount === 0) {
+                                    showStatus('表示できる配置済み写真がありません', 'error');
+                                    return;
+                                }
+                                setActiveModal('photo-viewer');
+                            }}
+                            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all border relative ${placedPhotoCount > 0 ? 'bg-gray-900 border-gray-700 text-indigo-300 hover:border-indigo-500' : 'bg-gray-900 border-gray-800 text-gray-600'}`}
+                            title="配置済み写真を確認"
                         >
-                            <QuestionMarkCircleIcon className="w-6 h-6" />
+                            <PhotoIcon className="w-5 h-5" />
+                            {placedPhotoCount > 0 && (
+                                <div className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                    {placedPhotoCount}
+                                </div>
+                            )}
                         </button>
+                        <CategoryButton id="construction" label="構造" active={activeTab === 'construction' && isPaletteOpen} onClick={handleCategoryClick} />
+                        
+                        <button 
+                            onClick={() => { setIsLibraryOpen(!isLibraryOpen); setIsPaletteOpen(false); }}
+                            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all border relative ${isLibraryOpen ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-gray-900 border-gray-800 text-gray-500'}`}
+                            title="写真ライブラリ"
+                        >
+                            <span className="text-xs font-bold">写真</span>
+                            {pendingPhotoIds.length > 0 && (
+                                <div className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
+                                    {pendingPhotoIds.length}
+                                </div>
+                            )}
+                        </button>
+
+                        <CategoryButton id="inspection" label="点検" active={activeTab === 'inspection' && isPaletteOpen} onClick={handleCategoryClick} />
+
+                        <button 
+                            onClick={() => {
+                                const nextMode = 'inspection-voice';
+                                setAppMode(appMode === nextMode ? 'pan' : nextMode);
+                            }}
+                            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all border ${appMode.includes('voice') ? 'bg-red-600 border-red-400 text-white animate-pulse' : 'bg-gray-900 border-gray-800 text-gray-500'}`}
+                            title="音声入力モード"
+                        >
+                            <span className="text-xs font-bold">音声</span>
+                        </button>
+
+                        <CategoryButton id="name" label="ラベル" active={activeTab === 'name' && isPaletteOpen} onClick={handleCategoryClick} />
+                    </div>
+                    <div className="p-1.5 border-t border-gray-800 bg-gray-950 flex flex-col gap-2 pb-6 items-center">
                         <button 
                             onClick={() => setIsColorPickerOpen(true)} 
                             className="w-11 h-6 rounded-full border border-gray-700 shadow-md hover:scale-105 transition-all mb-2" 
                             style={{ backgroundColor: currentLineColor }} 
                         />
-                        <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} disabled={isExporting} className="w-11 h-11 bg-indigo-600 text-white rounded-xl flex items-center justify-center disabled:opacity-50 shadow-lg active:scale-95 transition-all" title="エクスポート形式を選択">
+                        <button onClick={performCropAndExport} disabled={isExporting} className="w-11 h-11 bg-indigo-600 text-white rounded-xl flex items-center justify-center disabled:opacity-50 shadow-lg active:scale-95 transition-all" title="保存">
                             {isExporting ? <Spinner /> : <BoltIcon className="w-6 h-6" />}
+                        </button>
+                        <button
+                            onClick={exportStateToJson}
+                            className="w-11 h-11 bg-gray-900 border border-gray-800 text-indigo-300 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                            title="JSONバックアップを書き出し"
+                        >
+                            <DownloadIcon className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
@@ -327,14 +311,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ state, actions, markerActions,
 
 const CategoryButton: React.FC<{
     id: MarkerCategory;
-    icon: React.FC<{ className?: string }>;
+    label: string;
     active: boolean;
     onClick: (id: MarkerCategory) => void;
-}> = ({ id, icon: Icon, active, onClick }) => (
+}> = ({ id, label, active, onClick }) => (
     <button
         onClick={() => onClick(id)}
         className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all border relative ${active ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-gray-900 border-gray-800 text-gray-500 hover:text-indigo-400'}`}
     >
-        <Icon className="w-6 h-6" />
+        <span className="text-xs font-bold">{label}</span>
     </button>
 );

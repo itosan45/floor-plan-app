@@ -1,11 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Marker, Photo } from '../types';
 import { EditorState } from '../hooks/useEditorState';
 import { InteractiveMarker, MarkerRenderer } from './Marker';
 import { Viewport, DrawingLineInfo } from '../hooks/useDrawingInteraction';
 import { BASE_CONTAINER_WIDTH, MARKER_DEFINITIONS } from '../constants';
-import { getCanvasCoordinates } from '../utils/coordinates';
 
 interface EditorCanvasProps {
     floorPlanRef: React.RefObject<HTMLDivElement>;
@@ -21,7 +20,6 @@ interface EditorCanvasProps {
     floorPlanAspectRatio: number | null;
     drawingPhotoMarkerInfo: DrawingLineInfo | null;
     drawingLineInfo: DrawingLineInfo | null;
-    hoverPos: { x: number; y: number } | null;
     updateMarker: (id: string, updates: Partial<Marker>) => void;
     setSelectedMarkerId: (id: string | null) => void;
     removeMarker: (id: string) => void;
@@ -49,6 +47,9 @@ const UnifiedDrawingPreview: React.FC<{
     const dist = Math.sqrt(dx * dx + dy * dy);
     const rotation = Math.atan2(dy, dx) * (180 / Math.PI);
 
+    const s = canvasWidth / BASE_CONTAINER_WIDTH;
+    const baseLen = isGridMode && gridSize ? gridSize : 40 * s;
+
     const ghostMarker: Marker = {
         id: 'ghost',
         type: type as Marker['type'],
@@ -57,7 +58,7 @@ const UnifiedDrawingPreview: React.FC<{
         width: (def.interaction === 'area') ? Math.abs(currentX - startX) : undefined,
         height: (def.interaction === 'area') ? Math.abs(currentY - startY) : undefined,
         rotation: (mode === 'photo' || def.interaction === 'line') ? rotation : 0,
-        length: (def.interaction === 'line') ? dist / (isGridMode ? gridSize : 60 * (canvasWidth / BASE_CONTAINER_WIDTH)) : 1.0,
+        length: (def.interaction === 'line') ? dist / (isGridMode ? gridSize : 60 * s) : (mode === 'photo' && dist > 10 && !type.startsWith('text_') ? Math.max(0.2, dist / baseLen) : 1.0),
         number,
         color: lineColor,
         lineThickness
@@ -91,15 +92,12 @@ const UnifiedDrawingPreview: React.FC<{
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({
     floorPlanRef, containerRef, viewport, currentCanvasWidth, logicalHeight,
     isGridMode, gridDataUrl, floorPlanImage, markers, state,
-    floorPlanAspectRatio, drawingPhotoMarkerInfo, drawingLineInfo, hoverPos,
+    floorPlanAspectRatio, drawingPhotoMarkerInfo, drawingLineInfo,
     updateMarker, setSelectedMarkerId, onPointerDown, onPointerMove, onPointerUp
 }) => {
-    const [debugCoords, setDebugCoords] = useState<{x: number, y: number} | null>(null);
-
     const isDrawingOrPlacingMode = 
         state.appMode === 'draw' || 
-        state.appMode.startsWith('inspection-') || 
-        state.appMode === 'drafting-voice';
+        state.appMode.startsWith('inspection-');
 
     const isInteracting = !!drawingLineInfo || !!drawingPhotoMarkerInfo;
 
@@ -161,42 +159,13 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
                         isSelected={state.selectedMarkerId === marker.id}
                         onSelect={setSelectedMarkerId}
                         isDrawing={isInteracting}
-                        isPhotographyMode={state.appMode.startsWith('inspection') || state.appMode === 'drafting-voice'}
+                        isPhotographyMode={state.appMode.startsWith('inspection')}
                         containerWidth={currentCanvasWidth}
                         floorPlanAspectRatio={floorPlanAspectRatio}
                         isGridMode={isGridMode}
                         gridSize={state.gridSize}
-                        markers={markers}
                     />
                 ))}
-
-                {state.pendingRoom && hoverPos && (
-                    <div 
-                        className="absolute pointer-events-none z-[301]"
-                        style={{
-                            left: `${hoverPos.x * 100}%`,
-                            top: `${hoverPos.y * 100}%`,
-                            width: `${((state.pendingRoom.gridW * state.gridSize) / currentCanvasWidth) * 100}%`,
-                            height: `${((state.pendingRoom.gridH * state.gridSize) / logicalHeight) * 100}%`,
-                        }}
-                    >
-                        <MarkerRenderer 
-                            marker={{
-                                id: 'pending-ghost',
-                                type: 'room',
-                                x: hoverPos.x,
-                                y: hoverPos.y,
-                                gridW: state.pendingRoom.gridW,
-                                gridH: state.pendingRoom.gridH,
-                                text: state.pendingRoom.label
-                            }} 
-                            scale={currentCanvasWidth / BASE_CONTAINER_WIDTH}
-                            isGridMode={isGridMode}
-                            gridSize={state.gridSize}
-                            isPreview={true}
-                        />
-                    </div>
-                )}
                 
                 <svg className="absolute inset-0 pointer-events-none z-20" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
                     <defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" fill="#ef4444"><polygon points="0 0, 10 3.5, 0 7" /></marker></defs>

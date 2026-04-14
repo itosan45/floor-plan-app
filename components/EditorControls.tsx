@@ -2,9 +2,9 @@
 import React from 'react';
 import { EditorState, EditorActions } from '../hooks/useEditorState';
 import { 
-    MaximizeIcon, MinimizeIcon, PencilIcon, HandIcon, 
+    MaximizeIcon, PencilIcon, HandIcon, 
     ZoomInIcon, ZoomOutIcon, RefreshIcon, CameraIcon, PhotoIcon, 
-    QuestionMarkCircleIcon, UndoIcon, SparklesIcon, ClipboardIcon, HammerIcon, BoltIcon
+    QuestionMarkCircleIcon, UndoIcon, SparklesIcon, HammerIcon
 } from './icons';
 import { APP_INFO } from '../constants';
 
@@ -195,6 +195,17 @@ export const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                                         type="range" min="0.2" max="20.0" step="0.1" 
                                         value={selectedMarker?.length || 1} 
                                         onChange={(e) => updateMarker(selectedMarkerId, { length: parseFloat(e.target.value) })} 
+                                        className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" 
+                                    />
+                                </div>
+                            )}
+                             {['photo', 'foundation_line', 'crack_line', 'blower_fan', 'spray_arrow', 'access_point', 'text_toilet', 'text_washroom', 'text_tiled_bath', 'text_ub', 'text_laundry', 'text_laundry_room', 'text_nando', 'text_western', 'text_free_room', 'text_butsu', 'text_toko', 'text_lcl', 'text_den', 'text_changing', 'text_wash_change', 'text_entrance', 'text_hall', 'text_corridor', 'text_stairs', 'text_ldk', 'text_ld', 'text_living', 'text_dining', 'text_kitchen', 'text_japanese', 'text_closet', 'text_wcl', 'text_shoes'].includes(selectedMarker?.type || '') && (
+                                <div className="pt-3 border-t border-gray-800">
+                                    <label className="text-[9px] font-black text-blue-400 uppercase block mb-2 tracking-widest">回転: {selectedMarker?.rotation || 0}°</label>
+                                    <input 
+                                        type="range" min="0" max="359" step="1" 
+                                        value={selectedMarker?.rotation || 0} 
+                                        onChange={(e) => updateMarker(selectedMarkerId, { rotation: parseInt(e.target.value) })} 
                                         className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500" 
                                     />
                                 </div>

@@ -63,17 +63,49 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                         <section>
                             <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
                                 <div className="w-2 h-6 bg-indigo-600 rounded-full" />
-                                自動トリミング機能
+                                サイドバーの機能
                             </h3>
-                            <div className="bg-gray-50 border-2 border-gray-200 p-6 rounded-[2rem] flex flex-col md:flex-row gap-6 items-center">
-                                <div className="bg-white p-4 rounded-3xl shadow-sm">
-                                    <BoltIcon className="w-12 h-12 text-gray-700" />
-                                </div>
-                                <div className="space-y-2 text-center md:text-left">
-                                    <p className="font-black text-gray-900 text-lg">最適な範囲を自動設定</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold text-sm whitespace-nowrap">構造</div>
                                     <p className="text-sm text-gray-600 font-bold leading-relaxed">
-                                        保存ボタンを押すと、マーカーが配置されている範囲を自動で計算し、
-                                        余白をカットしたA4サイズのJPEG画像を生成します。
+                                        点検口や基礎、ハツリなど、建物の構造に関するマーカーを配置します。
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold text-sm whitespace-nowrap">写真</div>
+                                    <p className="text-sm text-gray-600 font-bold leading-relaxed">
+                                        現場で撮影した写真をアップロードし、図面上に配置して管理します。
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold text-sm whitespace-nowrap">点検</div>
+                                    <p className="text-sm text-gray-600 font-bold leading-relaxed">
+                                        白蟻の侵入・生息箇所や、撮影箇所などの点検結果を記録します。
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-red-100 text-red-700 rounded-lg font-bold text-sm whitespace-nowrap">音声</div>
+                                    <p className="text-sm text-gray-600 font-bold leading-relaxed">
+                                        音声入力モードを起動します。「和室の中央に白蟻被害」などと話しかけて記録できます。
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold text-sm whitespace-nowrap">ラベル</div>
+                                    <p className="text-sm text-gray-600 font-bold leading-relaxed">
+                                        「和室」「キッチン」などの部屋名や、自由なコメントを配置します。
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-gray-800 text-white rounded-lg font-bold text-sm whitespace-nowrap flex items-center justify-center"><BoltIcon className="w-4 h-4" /></div>
+                                    <p className="text-sm text-gray-600 font-bold leading-relaxed">
+                                        保存ボタン。マーカーの範囲を自動計算し、余白をカットしたA4画像を生成します。
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-indigo-600 text-white rounded-lg font-bold text-sm whitespace-nowrap">報</div>
+                                    <p className="text-sm text-gray-600 font-bold leading-relaxed">
+                                        レポート画面を開きます。配置した写真や点検結果を一覧で確認できます。
                                     </p>
                                 </div>
                             </div>

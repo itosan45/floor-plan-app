@@ -6,9 +6,10 @@ import { useMarkers } from '../hooks/useMarkers';
 import { generateUniqueId } from '../utils/common';
 import { resizeImage } from '../utils/imageProcessing';
 
-export type AppMode = 'pan' | 'draw' | 'inspection-voice' | 'inspection-manual' | 'drafting-voice';
-export type ActiveModal = 'none' | 'help' | 'report' | 'camera' | 'photo-viewer' | 'voice-drafting' | 'confirm-transition';
+export type AppMode = 'pan' | 'draw' | 'inspection-voice' | 'inspection-manual';
+export type ActiveModal = 'none' | 'help' | 'report' | 'camera' | 'photo-viewer' | 'confirm-transition';
 export type UiMode = 'office' | 'field';
+type CameraPlacement = { x: number; y: number; rotation: number; length: number };
 
 export interface EditorState {
     workflowStep: WorkflowStep;
@@ -23,7 +24,7 @@ export interface EditorState {
     gridSize: number;
     currentLineThickness: number;
     currentLineColor: string;
-    cameraTapPosition: { x: number; y: number } | null;
+    cameraTapPosition: CameraPlacement | null;
     activePhotoIndex: number;
     selectedMarkerId: string | null;
     isTrimming: boolean;
@@ -39,7 +40,13 @@ export interface EditorState {
     photoLibrary: Record<string, Photo>;
     pendingPhotoIds: string[];
     selectedPhotoId: string | null;
-    pendingRoom: { label: string, gridW: number, gridH: number } | null;
+    narration: {
+        persona: 'female' | 'male' | 'child';
+        speed: number;
+        bgmUrl: string | null;
+        bgmFileName: string | null;
+        bgmVolume: number;
+    };
 }
 
 export interface EditorActions {
@@ -56,7 +63,7 @@ export interface EditorActions {
     setGridSize: (size: number) => void;
     setCurrentLineThickness: (val: number) => void;
     setCurrentLineColor: (color: string) => void;
-    setCameraTapPosition: (pos: { x: number; y: number } | null) => void;
+    setCameraTapPosition: (pos: CameraPlacement | null) => void;
     addCapturedPhoto: (photo: Photo) => void;
     setActivePhotoIndex: (index: number) => void;
     setSelectedMarkerId: (id: string | null) => void;
@@ -77,14 +84,53 @@ export interface EditorActions {
     exportStateToJson: () => void;
     importStateFromJson: (file: File) => Promise<void>;
     resetEditor: () => void;
-    setPendingRoom: (room: { label: string, gridW: number, gridH: number } | null) => void;
     addPhotosToLibrary: (files: FileList) => Promise<void>;
     setSelectedPhotoId: (id: string | null) => void;
     updatePhotoLabel: (id: string, label: string) => void;
     startTutorial: () => void;
+    setNarrationSettings: (settings: Partial<EditorState['narration']>) => void;
 }
 
 const EditorContext = createContext<{ state: EditorState; actions: EditorActions } | null>(null);
+
+const dedupeIds = (ids: string[]) => Array.from(new Set(ids));
+
+const sanitizeImportedPhoto = (photo: unknown): Photo | null => {
+    if (!photo || typeof photo !== 'object') return null;
+
+    const candidate = photo as Partial<Photo>;
+    if (typeof candidate.id !== 'string' || typeof candidate.dataUrl !== 'string') return null;
+    if (!candidate.dataUrl.startsWith('data:image/')) return null;
+
+    return {
+        id: candidate.id,
+        dataUrl: candidate.dataUrl,
+        label: typeof candidate.label === 'string' ? candidate.label : '写真',
+        direction: candidate.direction,
+        timestamp: typeof candidate.timestamp === 'string' ? candidate.timestamp : undefined,
+        markerId: typeof candidate.markerId === 'string' ? candidate.markerId : undefined,
+    };
+};
+
+const sanitizeImportedPhotoLibrary = (value: unknown) => {
+    const nextPhotoLibrary: Record<string, Photo> = {};
+    let skippedCount = 0;
+
+    if (!value || typeof value !== 'object') {
+        return { nextPhotoLibrary, skippedCount };
+    }
+
+    Object.entries(value as Record<string, unknown>).forEach(([id, photo]) => {
+        const sanitized = sanitizeImportedPhoto(photo);
+        if (sanitized) {
+            nextPhotoLibrary[id] = sanitized;
+        } else {
+            skippedCount += 1;
+        }
+    });
+
+    return { nextPhotoLibrary, skippedCount };
+};
 
 export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('preparation');
@@ -99,7 +145,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [gridSize, setGridSize] = useState<number>(40);
     const [currentLineThickness, setCurrentLineThickness] = useState<number>(5);
     const [currentLineColor, setCurrentLineColor] = useState<string>('#0044cc');
-    const [cameraTapPosition, setCameraTapPosition] = useState<{ x: number; y: number } | null>(null);
+    const [cameraTapPosition, setCameraTapPosition] = useState<CameraPlacement | null>(null);
     const [capturedPhotos, setCapturedPhotos] = useState<Photo[]>([]);
     const [activePhotoIndex, setActivePhotoIndex] = useState(0);
     const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
@@ -111,10 +157,16 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [floorPlanWidth, setFloorPlanWidth] = useState<number>(1000);
     const [floorPlanAspectRatio, setFloorPlanAspectRatio] = useState<number | null>(null);
     const [isGridMode, setIsGridMode] = useState(false);
-    const [pendingRoom, setPendingRoom] = useState<{ label: string, gridW: number, gridH: number } | null>(null);
     const [photoLibrary, setPhotoLibrary] = useState<Record<string, Photo>>({});
     const [pendingPhotoIds, setPendingPhotoIds] = useState<string[]>([]);
     const [selectedPhotoId, _setSelectedPhotoId] = useState<string | null>(null);
+    const [narration, setNarration] = useState<EditorState['narration']>({
+        persona: 'female',
+        speed: 1.0,
+        bgmUrl: null,
+        bgmFileName: null,
+        bgmVolume: 0.2
+    });
     
     const { markers, addMarker: baseAddMarker, updateMarker, removeMarker: baseRemoveMarker, removeLastMarker: baseRemoveLastMarker, clearMarkers, setMarkers } = useMarkers();
 
@@ -126,13 +178,30 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const resetEditor = useCallback(() => {
         setWorkflowStep('preparation');
         setTutorialStep('none');
+        setUiMode('office');
+        setIsGridPanelOpen(false);
         setFloorPlanImage(null);
         setFloorPlanRotation(0);
+        setFloorPlanWidth(1000);
+        setFloorPlanAspectRatio(null);
         setIsGridMode(false);
+        setGridSize(40);
+        setCurrentLineThickness(5);
+        setCurrentLineColor('#0044cc');
         clearMarkers();
+        setCameraTapPosition(null);
+        setCapturedPhotos([]);
+        setActivePhotoIndex(0);
+        setSelectedMarkerId(null);
+        setIsTrimming(false);
+        setIsExporting(false);
+        setStatusMessage(null);
         setPhotoLibrary({});
         setPendingPhotoIds([]);
+        _setSelectedPhotoId(null);
         setAppMode('pan');
+        setActiveTab('inspection');
+        setCurrentMarkerType('rectangle_outline');
         setActiveModal('none');
     }, [clearMarkers]);
 
@@ -169,7 +238,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             } catch (err) { console.error("Image processing error", err); }
         }
         setPhotoLibrary(prev => ({ ...prev, ...newPhotos }));
-        setPendingPhotoIds(prev => [...prev, ...newIds]);
+        setPendingPhotoIds(prev => dedupeIds([...prev, ...newIds]));
         
         if (newIds.length > 0) {
             const firstId = newIds[0];
@@ -197,9 +266,12 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     const addMarker = useCallback((marker: Marker) => {
-        if (marker.type === 'photo' && selectedPhotoId) {
-            marker.photoId = selectedPhotoId;
-            const remaining = pendingPhotoIds.filter(id => id !== selectedPhotoId);
+        const nextMarker = { ...marker };
+        const photoIdToUse = nextMarker.photoId || (nextMarker.type === 'photo' ? selectedPhotoId : undefined);
+        
+        if (nextMarker.type === 'photo' && photoIdToUse) {
+            nextMarker.photoId = photoIdToUse;
+            const remaining = dedupeIds(pendingPhotoIds.filter(id => id !== photoIdToUse));
             setPendingPhotoIds(remaining);
             if (remaining.length > 0) {
                 const nextId = remaining[0];
@@ -212,26 +284,29 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
         
         // 座標の境界チェック
-        marker.x = Math.max(-0.2, Math.min(1.2, marker.x));
-        marker.y = Math.max(-0.2, Math.min(1.2, marker.y));
+        nextMarker.x = Math.max(-0.2, Math.min(1.2, nextMarker.x));
+        nextMarker.y = Math.max(-0.2, Math.min(1.2, nextMarker.y));
 
-        baseAddMarker(marker);
-        if (tutorialStep === 'place_room' && marker.type === 'room') setTutorialStep('place_access');
-        if (tutorialStep === 'place_access' && marker.type === 'access_point') setTutorialStep('underfloor_photo');
-        if (workflowStep === 'entry_setup' && marker.type === 'access_point') {
+        baseAddMarker(nextMarker);
+        if (tutorialStep === 'place_access' && nextMarker.type === 'access_point') setTutorialStep('underfloor_photo');
+        if (workflowStep === 'entry_setup' && nextMarker.type === 'access_point') {
             showStatus("侵入口を設定しました。床下モードの準備完了です。", "success");
         }
     }, [selectedPhotoId, baseAddMarker, workflowStep, tutorialStep, showStatus, pendingPhotoIds]);
 
     const removeMarker = useCallback((id: string) => {
         const marker = markers.find(m => m.id === id);
-        if (marker?.type === 'photo' && marker.photoId) setPendingPhotoIds(prev => [...prev, marker.photoId!]);
+        if (marker?.type === 'photo' && marker.photoId) {
+            setPendingPhotoIds(prev => dedupeIds([...prev, marker.photoId!]));
+        }
         baseRemoveMarker(id);
     }, [markers, baseRemoveMarker]);
 
     const removeLastMarker = useCallback(() => {
         const last = markers[markers.length - 1];
-        if (last?.type === 'photo' && last.photoId) setPendingPhotoIds(prev => [...prev, last.photoId!]);
+        if (last?.type === 'photo' && last.photoId) {
+            setPendingPhotoIds(prev => dedupeIds([...prev, last.photoId!]));
+        }
         baseRemoveLastMarker();
     }, [markers, baseRemoveLastMarker]);
 
@@ -247,11 +322,13 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 x: cameraTapPosition.x,
                 y: cameraTapPosition.y,
                 photoId: photo.id,
-                rotation: 0,
-                length: 1.0
+                rotation: cameraTapPosition.rotation,
+                length: cameraTapPosition.length
             });
             showStatus(`点検箇所 ${capturedPhotos.length + 1} を記録しました`, "success");
         }
+
+        setCameraTapPosition(null);
 
         if (tutorialStep === 'underfloor_photo') setTutorialStep('finish');
     }, [tutorialStep, cameraTapPosition, addMarker, capturedPhotos.length, showStatus]);
@@ -279,7 +356,21 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     const exportStateToJson = useCallback(() => {
-        const data = { version: "1.2.0", workflowStep, timestamp: new Date().toISOString(), floorPlanImage, floorPlanRotation, floorPlanWidth, floorPlanAspectRatio, isGridMode, gridSize, markers, photoLibrary, pendingPhotoIds };
+        const data = {
+            version: "1.7.0",
+            timestamp: new Date().toISOString(),
+            workflowStep,
+            uiMode,
+            floorPlanImage,
+            floorPlanRotation,
+            floorPlanWidth,
+            floorPlanAspectRatio,
+            isGridMode,
+            gridSize,
+            markers,
+            photoLibrary,
+            pendingPhotoIds,
+        };
         const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -287,39 +378,60 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         link.download = `plan_data_${Date.now()}.json`;
         link.click();
         URL.revokeObjectURL(url);
-    }, [workflowStep, floorPlanImage, floorPlanRotation, floorPlanWidth, floorPlanAspectRatio, isGridMode, gridSize, markers, photoLibrary, pendingPhotoIds]);
+    }, [workflowStep, uiMode, floorPlanImage, floorPlanRotation, floorPlanWidth, floorPlanAspectRatio, isGridMode, gridSize, markers, photoLibrary, pendingPhotoIds]);
 
     const importStateFromJson = useCallback(async (file: File) => {
         try {
             const text = await file.text();
             const data = JSON.parse(text);
-            
-            // 簡易バリデーション
-            if (!data.markers || !Array.isArray(data.markers)) {
-                throw new Error("Invalid data format: markers missing or not an array");
-            }
+            resetEditor();
+
+            const importedFloorPlan = sanitizeImportedPhoto(data.floorPlanImage);
+            const { nextPhotoLibrary, skippedCount } = sanitizeImportedPhotoLibrary(data.photoLibrary);
+            const nextMarkers = Array.isArray(data.markers) ? data.markers as Marker[] : [];
+            const nextPendingPhotoIds = dedupeIds(
+                (Array.isArray(data.pendingPhotoIds) ? data.pendingPhotoIds : []).filter((id: unknown): id is string => typeof id === 'string' && !!nextPhotoLibrary[id])
+            );
+            const importedPlacedPhotos = nextMarkers
+                .filter((marker): marker is Marker & { photoId: string } => marker.type === 'photo' && typeof marker.photoId === 'string')
+                .map(marker => nextPhotoLibrary[marker.photoId])
+                .filter((photo): photo is Photo => !!photo);
 
             if (data.workflowStep) setWorkflowStep(data.workflowStep);
-            setFloorPlanImage(data.floorPlanImage);
-            setFloorPlanRotation(data.floorPlanRotation || 0);
-            setFloorPlanWidth(data.floorPlanWidth || 1000);
-            setMarkers(data.markers);
-            setPhotoLibrary(data.photoLibrary || {});
-            setPendingPhotoIds(data.pendingPhotoIds || []);
-            showStatus("データを読み込みました", "success");
-        } catch (e) { 
-            console.error("Import error", e);
-            showStatus(e instanceof Error ? e.message : "読み込みに失敗しました", "error"); 
+            if (data.uiMode === 'office' || data.uiMode === 'field') setUiMode(data.uiMode);
+            setFloorPlanImage(importedFloorPlan);
+            setFloorPlanRotation(typeof data.floorPlanRotation === 'number' ? data.floorPlanRotation : 0);
+            setFloorPlanWidth(typeof data.floorPlanWidth === 'number' ? data.floorPlanWidth : 1000);
+            setFloorPlanAspectRatio(typeof data.floorPlanAspectRatio === 'number' ? data.floorPlanAspectRatio : null);
+            setIsGridMode(Boolean(data.isGridMode));
+            setGridSize(typeof data.gridSize === 'number' ? data.gridSize : 40);
+            setMarkers(nextMarkers);
+            setPhotoLibrary(nextPhotoLibrary);
+            setPendingPhotoIds(nextPendingPhotoIds);
+            _setSelectedPhotoId(nextPendingPhotoIds[0] ?? null);
+            setCapturedPhotos(importedPlacedPhotos);
+
+            if (skippedCount > 0) {
+                showStatus(`旧形式の画像 ${skippedCount} 件は復元できませんでした`, "error", 5000);
+            } else {
+                showStatus("データを読み込みました", "success");
+            }
+        } catch {
+            showStatus("読み込みに失敗しました", "error");
         }
-    }, [showStatus, setMarkers]);
+    }, [resetEditor, showStatus, setMarkers]);
 
     const state: EditorState = {
         workflowStep, tutorialStep, uiMode, isGridPanelOpen, isFullscreen, activeModal,
         appMode, activeTab, currentMarkerType, gridSize, currentLineThickness, currentLineColor,
         cameraTapPosition, activePhotoIndex, selectedMarkerId, isTrimming, isExporting, statusMessage,
         floorPlanImage, floorPlanRotation, floorPlanWidth, floorPlanAspectRatio, isGridMode, markers, capturedPhotos,
-        photoLibrary, pendingPhotoIds, selectedPhotoId, pendingRoom
+        photoLibrary, pendingPhotoIds, selectedPhotoId, narration
     };
+
+    const setNarrationSettings = useCallback((settings: Partial<EditorState['narration']>) => {
+        setNarration(prev => ({ ...prev, ...settings }));
+    }, []);
 
     const actions: EditorActions = useMemo(() => ({
         setWorkflowStep, setTutorialStep, setUiMode, nextStep, setIsGridPanelOpen, toggleFullscreen, setActiveModal,
@@ -328,12 +440,12 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSelectedMarkerId, setIsTrimming, setIsExporting, showStatus,
         setFloorPlanImage, setFloorPlanRotation, setFloorPlanWidth, setFloorPlanAspectRatio, setIsGridMode,
         addMarker, updateMarker, removeMarker, removeLastMarker, clearMarkers, setMarkers,
-        exportStateToJson, importStateFromJson, resetEditor, setPendingRoom,
-        addPhotosToLibrary, setSelectedPhotoId, updatePhotoLabel, startTutorial
+        exportStateToJson, importStateFromJson, resetEditor,
+        addPhotosToLibrary, setSelectedPhotoId, updatePhotoLabel, startTutorial, setNarrationSettings
     }), [
         nextStep, toggleFullscreen, showStatus, addMarker, updateMarker, removeMarker, 
         removeLastMarker, clearMarkers, setMarkers, exportStateToJson, importStateFromJson, 
-        resetEditor, addPhotosToLibrary, setSelectedPhotoId, updatePhotoLabel, startTutorial
+        resetEditor, addPhotosToLibrary, setSelectedPhotoId, updatePhotoLabel, startTutorial, setNarrationSettings
     ]);
 
     return <EditorContext.Provider value={{ state, actions }}>{children}</EditorContext.Provider>;

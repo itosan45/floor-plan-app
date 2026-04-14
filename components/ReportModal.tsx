@@ -1,11 +1,9 @@
 
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { EditorState } from '../hooks/useEditorState';
-import { XMarkIcon, CheckIcon, ClipboardIcon, PhotoIcon, Spinner } from './icons';
+import { XMarkIcon, CheckIcon, ClipboardIcon } from './icons';
 import { MarkerRenderer } from './Marker';
 import { BASE_CONTAINER_WIDTH, MARKER_DEFINITIONS } from '../constants';
-import { Photo } from '../types';
-import { loadHtml2Canvas } from '../utils/imageProcessing';
 import { calculateMarkersBoundingBox, calculateFitAndCenter } from '../utils/geometry';
 
 interface ReportModalProps {
@@ -13,8 +11,6 @@ interface ReportModalProps {
     state: EditorState;
     onClose: () => void;
 }
-
-const PHOTOS_PER_PAGE = 8;
 
 /**
  * Page 1: 平面図プロットページ
@@ -73,9 +69,9 @@ const FloorPlanPage: React.FC<{
                                 {markers.map(marker => (
                                     <div key={marker.id} style={{
                                         position: 'absolute', left: `${marker.x * 100}%`, top: `${marker.y * 100}%`,
-                                        transform: (marker.width || marker.height || marker.type === 'room') ? 'none' : (MARKER_DEFINITIONS[marker.type]?.interaction === 'line' ? 'translate(0, -50%)' : 'translate(-50%, -50%)'),
-                                        width: marker.width ? `${marker.width * 100}%` : (marker.type === 'room' ? `${((marker.gridW || 1) * gridSize / metrics.width) * 100}%` : undefined),
-                                        height: marker.height ? `${marker.height * 100}%` : (marker.type === 'room' ? `${((marker.gridH || 1) * gridSize / metrics.height) * 100}%` : undefined),
+                                        transform: (marker.width || marker.height) ? 'none' : (MARKER_DEFINITIONS[marker.type]?.interaction === 'line' ? 'translate(0, -50%)' : 'translate(-50%, -50%)'),
+                                        width: marker.width ? `${marker.width * 100}%` : undefined,
+                                        height: marker.height ? `${marker.height * 100}%` : undefined,
                                     }}>
                                         <MarkerRenderer marker={marker} scale={metrics.scale} isGridMode={isGridMode} gridSize={metrics.gridSize} />
                                     </div>

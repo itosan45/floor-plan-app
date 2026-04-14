@@ -1,5 +1,6 @@
-
 import { useState, useCallback, useRef } from 'react';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
+import { SpeechRecognition as NativeSpeechRecognition } from '@capacitor-community/speech-recognition';
 
 interface SpeechRecognitionEvent {
     resultIndex: number;
@@ -31,164 +32,237 @@ interface SpeechRecognition extends EventTarget {
     onend: ((this: SpeechRecognition, ev: Event) => void) | null;
 }
 
-// 点検・製図用の高度なキーワード辞書
 const KEYWORDS = {
     locations: ['キッチン', '台所', '和室', 'リビング', '居間', '浴室', '風呂', '洗面', 'トイレ', '玄関', '廊下', '脱衣', 'ホール', 'ポーチ', '階段', '納戸', 'クローゼット', '押入れ', '床下', '洋室'],
     directions: ['北', '南', '東', '西', '中央', '隅', '右', '左', '南東', '南西', '北東', '北西'],
-    orientations: ['横', '縦', 'よこ', 'たて', '水平', '垂直'],
     status: ['白蟻', 'シロアリ', '腐朽', 'カビ', '水漏れ', '漏水', '異常なし', '点検完了', 'シロアリあり', '被害あり', '湿気', 'ひび割れ'],
-    units: ['畳', '帖', '平米', 'メートル']
 };
 
 export const useVoiceInteraction = (config: {
     onInspectionResult: (data: { location: string, direction: string, status: string }) => void;
-    onDraftingResult: (data: { roomName: string, width: number, height: number }) => void;
     onError: (msg: string) => void;
 }) => {
+    const useNativeRecognition = Capacitor.isNativePlatform();
     const [isActive, setIsActive] = useState(false);
     const [transcript, setTranscript] = useState('');
     const recognitionRef = useRef<SpeechRecognition | null>(null);
-    const modeRef = useRef<'inspection' | 'drafting'>('inspection');
     const autoRestartRef = useRef(false);
     const isStartingRef = useRef(false);
+    const isActiveRef = useRef(false);
     const errorCountRef = useRef(0);
-    const lastStartTimeRef = useRef(0); // 最後に開始した時間
-    const restartTimeoutRef = useRef<number | null>(null);
+    const lastStartTimeRef = useRef(0);
+    const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastProcessedTranscriptRef = useRef('');
+    const nativePartialListenerRef = useRef<PluginListenerHandle | null>(null);
+    const nativeListeningStateListenerRef = useRef<PluginListenerHandle | null>(null);
 
-    const calculateGridSize = (size: number, isVertical: boolean) => {
-        let w = 0;
-        let h = 0;
-        switch (size) {
-            case 3: w = 3; h = 2; break;
-            case 4: w = 4; h = 2; break;
-            case 4.5: w = 3; h = 3; break;
-            case 6: w = 4; h = 3; break;
-            case 8: w = 4; h = 4; break;
-            case 10: w = 5; h = 4; break;
-            case 12: w = 6; h = 4; break;
-            default:
-                w = Math.ceil(Math.sqrt(size * 2 * 1.3));
-                h = Math.ceil((size * 2) / w);
-        }
-        if (isVertical) return { width: h, height: w };
-        return { width: w, height: h };
+    const updateActiveState = (value: boolean) => {
+        isActiveRef.current = value;
+        setIsActive(value);
     };
 
-    const parseText = (text: string) => {
-        if (modeRef.current === 'inspection') {
-            const foundLocation = KEYWORDS.locations.find(k => text.includes(k));
-            const foundDirection = KEYWORDS.directions.find(k => text.includes(k)) || '中央';
-            const foundStatus = KEYWORDS.status.find(k => text.includes(k));
-            if (foundLocation || foundStatus) {
-                config.onInspectionResult({
-                    location: foundLocation || '点検箇所',
-                    direction: foundDirection,
-                    status: foundStatus || '状況確認'
-                });
-                return true;
-            }
-        } else {
-            const foundRoom = KEYWORDS.locations.find(k => text.includes(k));
-            const numMatch = text.match(/(\d+\.?\d*|一|二|三|四|五|六|七|八|九|十)/);
-            const isVertical = text.includes('縦') || text.includes('たて') || text.includes('垂直');
-            if (foundRoom) {
-                let size = 6;
-                if (numMatch) {
-                    const n = numMatch[0];
-                    const numMap: Record<string, number> = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '十':10 };
-                    size = numMap[n] || parseFloat(n);
-                }
-                const dimensions = calculateGridSize(size, isVertical);
-                config.onDraftingResult({
-                    roomName: foundRoom,
-                    width: dimensions.width,
-                    height: dimensions.height
-                });
-                return true;
-            }
-        }
-        return false;
-    };
-
-    const stopVoice = useCallback(() => {
-        autoRestartRef.current = false;
-        
+    const clearRestartTimeout = () => {
         if (restartTimeoutRef.current) {
             clearTimeout(restartTimeoutRef.current);
             restartTimeoutRef.current = null;
         }
+    };
 
-        if (recognitionRef.current) {
-            try {
-                recognitionRef.current.onend = null; 
-                recognitionRef.current.onerror = null;
-                recognitionRef.current.onresult = null;
-                recognitionRef.current.stop();
-            } catch (e) {
-                console.warn("Recognition stop failed:", e);
-            }
-            recognitionRef.current = null;
+    const parseText = (text: string) => {
+        const foundLocation = KEYWORDS.locations.find(keyword => text.includes(keyword));
+        const foundDirection = KEYWORDS.directions.find(keyword => text.includes(keyword)) || '中央';
+        const foundStatus = KEYWORDS.status.find(keyword => text.includes(keyword));
+
+        if (foundLocation || foundStatus) {
+            config.onInspectionResult({
+                location: foundLocation || '点検箇所',
+                direction: foundDirection,
+                status: foundStatus || '状況確認',
+            });
+            return true;
         }
-        
-        setIsActive(false);
-        isStartingRef.current = false;
-        setTranscript('');
-    }, []);
+        return false;
+    };
 
-    const startVoice = useCallback((mode: 'inspection' | 'drafting') => {
-        // 多重起動防止
-        if (isActive || isStartingRef.current) return;
+    const handleRecognizedText = (text: string) => {
+        const normalized = text.trim();
+        setTranscript(normalized);
 
-        const SpeechRecognitionClass = (window as unknown as { SpeechRecognition: new () => SpeechRecognition, webkitSpeechRecognition: new () => SpeechRecognition }).SpeechRecognition || (window as unknown as { SpeechRecognition: new () => SpeechRecognition, webkitSpeechRecognition: new () => SpeechRecognition }).webkitSpeechRecognition;
-        if (!SpeechRecognitionClass) {
-            config.onError("このブラウザは音声認識に対応していません");
+        if (!normalized || normalized === lastProcessedTranscriptRef.current) {
             return;
         }
 
-        modeRef.current = mode;
-        autoRestartRef.current = true;
-        isStartingRef.current = true;
-        
+        const matched = parseText(normalized);
+        if (matched) {
+            lastProcessedTranscriptRef.current = normalized;
+            setTimeout(() => setTranscript(''), 800);
+        }
+    };
+
+    const stopVoice = useCallback(async () => {
+        autoRestartRef.current = false;
+        clearRestartTimeout();
+
+        if (useNativeRecognition) {
+            try {
+                await NativeSpeechRecognition.stop();
+            } catch {
+                console.warn('Native speech recognition stop failed');
+            }
+
+            if (nativePartialListenerRef.current) {
+                await nativePartialListenerRef.current.remove();
+                nativePartialListenerRef.current = null;
+            }
+
+            if (nativeListeningStateListenerRef.current) {
+                await nativeListeningStateListenerRef.current.remove();
+                nativeListeningStateListenerRef.current = null;
+            }
+
+            try {
+                await NativeSpeechRecognition.removeAllListeners();
+            } catch {
+                console.warn('Native speech recognition listener cleanup failed');
+            }
+        } else if (recognitionRef.current) {
+            try {
+                recognitionRef.current.onend = null;
+                recognitionRef.current.onerror = null;
+                recognitionRef.current.onresult = null;
+                recognitionRef.current.stop();
+            } catch {
+                console.warn('Recognition stop failed');
+            }
+            recognitionRef.current = null;
+        }
+
+        updateActiveState(false);
+        isStartingRef.current = false;
+        lastProcessedTranscriptRef.current = '';
+        setTranscript('');
+    }, [useNativeRecognition]);
+
+    const scheduleRestart = useCallback((restart: () => Promise<void>) => {
+        const sessionDuration = Date.now() - lastStartTimeRef.current;
+        const baseWait = sessionDuration < 2000 ? 2500 : 1500;
+        const waitTime = baseWait + (errorCountRef.current * 1000);
+
+        clearRestartTimeout();
+
+        restartTimeoutRef.current = setTimeout(() => {
+            if (!autoRestartRef.current || isActiveRef.current || isStartingRef.current) {
+                return;
+            }
+
+            isStartingRef.current = true;
+            void restart().catch(() => {
+                isStartingRef.current = false;
+            });
+        }, waitTime);
+    }, []);
+
+    const startNativeRecognition = useCallback(async () => {
+        const availability = await NativeSpeechRecognition.available();
+        if (!availability.available) {
+            throw new Error('この端末は音声認識に対応していません');
+        }
+
+        const permissions = await NativeSpeechRecognition.requestPermissions();
+        if (permissions.speechRecognition !== 'granted') {
+            throw new Error('マイクの使用が許可されていません');
+        }
+
+        if (nativePartialListenerRef.current) {
+            await nativePartialListenerRef.current.remove();
+        }
+        if (nativeListeningStateListenerRef.current) {
+            await nativeListeningStateListenerRef.current.remove();
+        }
+
+        nativePartialListenerRef.current = await NativeSpeechRecognition.addListener('partialResults', ({ matches }) => {
+            const latestTranscript = matches[matches.length - 1] || '';
+            handleRecognizedText(latestTranscript);
+        });
+
+        nativeListeningStateListenerRef.current = await NativeSpeechRecognition.addListener('listeningState', ({ status }) => {
+            if (status === 'started') {
+                updateActiveState(true);
+                isStartingRef.current = false;
+                lastStartTimeRef.current = Date.now();
+                errorCountRef.current = 0;
+                lastProcessedTranscriptRef.current = '';
+                return;
+            }
+
+            updateActiveState(false);
+            isStartingRef.current = false;
+
+            if (autoRestartRef.current) {
+                scheduleRestart(async () => {
+                    await NativeSpeechRecognition.start({
+                        language: 'ja-JP',
+                        maxResults: 3,
+                        partialResults: true,
+                        popup: false,
+                        prompt: '点検内容を話してください',
+                    });
+                });
+            }
+        });
+
+        await NativeSpeechRecognition.start({
+            language: 'ja-JP',
+            maxResults: 3,
+            partialResults: true,
+            popup: false,
+            prompt: '点検内容を話してください',
+        });
+    }, [scheduleRestart]);
+
+    const startWebRecognition = useCallback(async () => {
+        const SpeechRecognitionClass =
+            (window as unknown as { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ||
+            (window as unknown as { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
+
+        if (!SpeechRecognitionClass) {
+            throw new Error('このブラウザは音声認識に対応していません');
+        }
+
         const recognition: SpeechRecognition = new SpeechRecognitionClass();
         recognition.lang = 'ja-JP';
         recognition.interimResults = true;
         recognition.continuous = true;
 
         recognition.onstart = () => {
-            setIsActive(true);
+            updateActiveState(true);
             isStartingRef.current = false;
             lastStartTimeRef.current = Date.now();
-            setTranscript('');
             errorCountRef.current = 0;
+            lastProcessedTranscriptRef.current = '';
+            setTranscript('');
         };
 
         recognition.onresult = (event: SpeechRecognitionEvent) => {
             let interim = '';
             let final = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const transcriptPart = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
+
+            for (let index = event.resultIndex; index < event.results.length; ++index) {
+                const transcriptPart = event.results[index][0].transcript;
+                if (event.results[index].isFinal) {
                     final += transcriptPart;
                 } else {
                     interim += transcriptPart;
                 }
             }
-            const displayTranscript = final || interim;
-            setTranscript(displayTranscript);
-            if (final) {
-                const matched = parseText(final);
-                if (matched) {
-                    setTimeout(() => setTranscript(''), 800);
-                }
-            }
+
+            handleRecognizedText(final || interim);
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
             const error = event.error;
 
-            // no-speech はエラーとして扱わず、静かに終了させる（onendで再開）
             if (error === 'no-speech') return;
-
             if (error === 'aborted') {
                 isStartingRef.current = false;
                 return;
@@ -196,58 +270,51 @@ export const useVoiceInteraction = (config: {
 
             if (error === 'not-allowed' || error === 'service-not-allowed') {
                 autoRestartRef.current = false;
-                config.onError("マイクの使用が許可されていません");
-                stopVoice();
+                void stopVoice();
+                config.onError('マイクの使用が許可されていません');
                 return;
             }
 
             errorCountRef.current++;
-            console.error("Speech Recognition Error:", error);
+            console.error('Speech Recognition Error:', error);
         };
 
         recognition.onend = () => {
-            setIsActive(false);
+            updateActiveState(false);
             isStartingRef.current = false;
 
             if (autoRestartRef.current) {
-                // 連続エラーが一定数を超えたら停止
-                if (errorCountRef.current > 5) {
-                    autoRestartRef.current = false;
-                    config.onError("音声認識が連続して失敗したため停止しました。環境を確認してください。");
-                    setIsActive(false);
-                    return;
-                }
-
-                const sessionDuration = Date.now() - lastStartTimeRef.current;
-                
-                // 通常時もモバイルChromeの通知音ループを避けるため最低1.5秒は空ける
-                // エラー回数に応じて待機時間を増やす（バックオフ）
-                const baseWait = sessionDuration < 2000 ? 2500 : 1500;
-                const waitTime = baseWait + (errorCountRef.current * 2000); 
-                
-                if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
-                
-                restartTimeoutRef.current = setTimeout(() => {
-                    // 待機中に stopVoice が呼ばれていないか再確認
-                    if (autoRestartRef.current && !isActive && !isStartingRef.current) {
-                        try { 
-                            recognition.start(); 
-                            isStartingRef.current = true;
-                        } catch(e) { 
-                            isStartingRef.current = false;
-                        }
-                    }
-                }, waitTime);
+                scheduleRestart(async () => {
+                    recognition.start();
+                });
             }
         };
 
         recognitionRef.current = recognition;
+        recognition.start();
+    }, [config, scheduleRestart, stopVoice]);
+
+    const startVoice = useCallback(async (_mode: 'inspection' = 'inspection') => {
+        if (isActiveRef.current || isStartingRef.current) return;
+
+        autoRestartRef.current = true;
+        isStartingRef.current = true;
+        lastProcessedTranscriptRef.current = '';
+
         try {
-            recognition.start();
-        } catch (e) {
+            if (useNativeRecognition) {
+                await startNativeRecognition();
+            } else {
+                await startWebRecognition();
+            }
+        } catch (err) {
             isStartingRef.current = false;
+            updateActiveState(false);
+            const message = err instanceof Error ? err.message : '音声認識の開始に失敗しました';
+            config.onError(message);
+            console.error('Voice start failed:', err);
         }
-    }, [config, isActive, stopVoice]);
+    }, [config, startNativeRecognition, startWebRecognition, useNativeRecognition]);
 
     return { isActive, startVoice, stopVoice, transcript };
 };

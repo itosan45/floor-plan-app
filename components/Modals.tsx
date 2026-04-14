@@ -6,9 +6,8 @@ import { XMarkIcon, CheckIcon, RefreshIcon, SparklesIcon, MicrophoneIcon } from 
 export const TutorialOverlay: React.FC<{ step: string, onNext: () => void }> = ({ step, onNext }) => {
     const getContent = () => {
         switch(step) {
-            case 'welcome': return { title: 'ようこそ！練習を始めましょう', text: 'まずは図面に「部屋」を置いてみましょう。左側の「施工」タブから部屋を選べます。', btn: '了解！' };
-            case 'place_room': return { title: '部屋を配置しましょう', text: '図面上の好きな場所をタップして、部屋を設置してください。', btn: 'やってみる' };
-            case 'place_access': return { title: '侵入口を決めましょう', text: '次に床下に潜る場所（点検口）を置きます。「点検」タブから侵入口を選んでください。', btn: '次へ' };
+            case 'welcome': return { title: 'ようこそ！練習を始めましょう', text: 'まずは図面に「点検口」を置いてみましょう。左側の「構造」タブから選べます。', btn: '了解！' };
+            case 'place_access': return { title: '侵入口を決めましょう', text: '床下に潜る場所（点検口）を置きます。「構造」タブから侵入口を選んでください。', btn: '次へ' };
             case 'underfloor_photo': return { title: '床下で撮影！', text: '最後は床下での撮影です。カメラアイコンをタップして、被害状況を記録しましょう。', btn: '了解' };
             case 'finish': return { title: 'チュートリアル完了！', text: 'おめでとうございます！これで一通りの流れがわかりました。本番でも頑張りましょう！', btn: '終了して戻る' };
             default: return null;
