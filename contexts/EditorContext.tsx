@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { Marker, MarkerType, Photo, WorkflowStep, TutorialStep } from '../types';
-import { MarkerCategory } from '../constants';
+import { GRID_CELL_COUNT, MarkerCategory } from '../constants';
 import { useMarkers } from '../hooks/useMarkers';
 import { generateUniqueId } from '../utils/common';
 import { resizeImage } from '../utils/imageProcessing';
@@ -94,6 +94,8 @@ export interface EditorActions {
 const EditorContext = createContext<{ state: EditorState; actions: EditorActions } | null>(null);
 
 const dedupeIds = (ids: string[]) => Array.from(new Set(ids));
+const DEFAULT_GRID_CANVAS_WIDTH = 1200;
+const DEFAULT_GRID_SIZE = DEFAULT_GRID_CANVAS_WIDTH / GRID_CELL_COUNT;
 
 const sanitizeImportedPhoto = (photo: unknown): Photo | null => {
     if (!photo || typeof photo !== 'object') return null;
@@ -142,7 +144,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [appMode, setAppMode] = useState<AppMode>('pan');
     const [activeTab, setActiveTab] = useState<MarkerCategory>('inspection');
     const [currentMarkerType, setCurrentMarkerType] = useState<MarkerType>('rectangle_outline');
-    const [gridSize, setGridSize] = useState<number>(40);
+    const [gridSize, setGridSize] = useState<number>(DEFAULT_GRID_SIZE);
     const [currentLineThickness, setCurrentLineThickness] = useState<number>(5);
     const [currentLineColor, setCurrentLineColor] = useState<string>('#0044cc');
     const [cameraTapPosition, setCameraTapPosition] = useState<CameraPlacement | null>(null);
@@ -185,7 +187,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setFloorPlanWidth(1000);
         setFloorPlanAspectRatio(null);
         setIsGridMode(false);
-        setGridSize(40);
+        setGridSize(DEFAULT_GRID_SIZE);
         setCurrentLineThickness(5);
         setCurrentLineColor('#0044cc');
         clearMarkers();
@@ -209,8 +211,9 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         resetEditor();
         setUiMode('field');
         setIsGridMode(true);
-        setFloorPlanWidth(1200);
+        setFloorPlanWidth(DEFAULT_GRID_CANVAS_WIDTH);
         setFloorPlanAspectRatio(1);
+        setGridSize(DEFAULT_GRID_SIZE);
         setWorkflowStep('floor_drafting');
         setTutorialStep('welcome');
     }, [resetEditor]);
@@ -401,10 +404,14 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (data.uiMode === 'office' || data.uiMode === 'field') setUiMode(data.uiMode);
             setFloorPlanImage(importedFloorPlan);
             setFloorPlanRotation(typeof data.floorPlanRotation === 'number' ? data.floorPlanRotation : 0);
-            setFloorPlanWidth(typeof data.floorPlanWidth === 'number' ? data.floorPlanWidth : 1000);
+            const importedFloorPlanWidth = typeof data.floorPlanWidth === 'number' ? data.floorPlanWidth : 1000;
+            setFloorPlanWidth(importedFloorPlanWidth);
             setFloorPlanAspectRatio(typeof data.floorPlanAspectRatio === 'number' ? data.floorPlanAspectRatio : null);
             setIsGridMode(Boolean(data.isGridMode));
-            setGridSize(typeof data.gridSize === 'number' ? data.gridSize : 40);
+            const importedGridSize = typeof data.gridSize === 'number'
+                ? data.gridSize
+                : (Boolean(data.isGridMode) ? importedFloorPlanWidth / GRID_CELL_COUNT : DEFAULT_GRID_SIZE);
+            setGridSize(importedGridSize);
             setMarkers(nextMarkers);
             setPhotoLibrary(nextPhotoLibrary);
             setPendingPhotoIds(nextPendingPhotoIds);

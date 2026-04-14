@@ -1,7 +1,7 @@
 
 import React, { useRef } from 'react';
 import type { Marker, MarkerType } from '../types';
-import { MARKER_DEFINITIONS, BASE_CONTAINER_WIDTH } from '../constants';
+import { MARKER_DEFINITIONS, BASE_CONTAINER_WIDTH, GRID_DRAWING_SUBDIVISIONS } from '../constants';
 import { snapToGrid } from '../utils/coordinates';
 import { AgitatorFanIcon, BlowerFanIcon, TimerIcon } from './icons';
 import { useEditorContext } from '../contexts/EditorContext';
@@ -19,6 +19,14 @@ interface MarkerComponentProps {
 
 const POINT_BASE_SIZE = 28;
 const LINE_BASE_HEIGHT = 10;
+const GRID_BASE_UNIT = 24;
+
+const getRenderUnit = (scale: number, isGridMode?: boolean, gridSize?: number) => {
+    if (isGridMode && gridSize) {
+        return gridSize / GRID_BASE_UNIT;
+    }
+    return scale;
+};
 
 const getSize = (scale: number, isGridMode: boolean | undefined, gridSize: number | undefined, basePx: number, previewSize?: number, uiMode?: string) => {
     if (previewSize) return previewSize;
@@ -26,11 +34,20 @@ const getSize = (scale: number, isGridMode: boolean | undefined, gridSize: numbe
     let adjustedBase = basePx;
     if (uiMode === 'field') adjustedBase *= 1.5;
 
-    if (isGridMode && gridSize) {
-        const ratio = adjustedBase / 24; 
-        return ratio * gridSize;
-    }
-    return adjustedBase * scale;
+    return adjustedBase * getRenderUnit(scale, isGridMode, gridSize);
+};
+
+const getLineThicknessPx = (
+    markerThickness: number | undefined,
+    scale: number,
+    isGridMode: boolean | undefined,
+    gridSize: number | undefined,
+    fallbackBasePx: number,
+    modeScale = 1
+) => {
+    const renderUnit = getRenderUnit(scale, isGridMode, gridSize);
+    const baseThickness = markerThickness ?? fallbackBasePx;
+    return baseThickness * renderUnit * modeScale;
 };
 
 const getMarkerZIndex = (type: MarkerType, isSelected: boolean): number => {
@@ -41,8 +58,8 @@ const getMarkerZIndex = (type: MarkerType, isSelected: boolean): number => {
     return 10;
 };
 
-const CommentBoxMarker: React.FC<MarkerComponentProps> = ({ marker, scale, previewSize, isPreview, uiMode }) => {
-    const s = previewSize ? (previewSize / 24) : scale;
+const CommentBoxMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode, gridSize, previewSize, isPreview, uiMode }) => {
+    const s = previewSize ? (previewSize / GRID_BASE_UNIT) : getRenderUnit(scale, isGridMode, gridSize);
     const modeS = uiMode === 'field' ? 1.5 : 1.0;
     return (
         <div
@@ -65,10 +82,12 @@ const CommentBoxMarker: React.FC<MarkerComponentProps> = ({ marker, scale, previ
 const PhotoMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode, gridSize, previewSize, isPreview, uiMode }) => {
     const baseSize = uiMode === 'field' ? 36 : 24;
     const markerSize = getSize(scale, isGridMode, gridSize, baseSize, previewSize, uiMode);
-    const s = previewSize ? (previewSize / baseSize) : scale;
+    const renderUnit = previewSize ? (previewSize / baseSize) : getRenderUnit(scale, isGridMode, gridSize);
     
-    const arrowLength = (marker.length ?? 1.0) * (isGridMode && gridSize ? gridSize : 40 * s);
-    const strokeWidth = (isGridMode && gridSize && !previewSize) ? Math.max(3, gridSize/7) : 5 * s;
+    const arrowLength = (marker.length ?? 1.0) * (isGridMode && gridSize ? gridSize : 40 * renderUnit);
+    const strokeWidth = previewSize
+        ? Math.max(2, 5 * renderUnit)
+        : getLineThicknessPx(undefined, scale, isGridMode, gridSize, 5, 1);
 
     return (
         <div className={`relative flex items-center justify-center ${isPreview ? 'animate-pulse' : ''}`} style={{ width: `${markerSize}px`, height: `${markerSize}px` }}>
@@ -138,15 +157,10 @@ const LineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode,
     if (previewSize) {
         height = 10;
     } else {
-        if (marker.lineThickness) {
-            height = marker.lineThickness * scale * modeS;
-        } else {
-            if (isGridMode && gridSize) {
-                height = isBlock ? gridSize * 0.4 * modeS : gridSize * 0.2 * modeS;
-            } else {
-                height = (isBlock ? 16 : LINE_BASE_HEIGHT) * scale * modeS;
-            }
-        }
+        const fallbackBasePx = isGridMode && gridSize
+            ? (isBlock ? gridSize * 0.4 / getRenderUnit(scale, isGridMode, gridSize) : gridSize * 0.2 / getRenderUnit(scale, isGridMode, gridSize))
+            : (isBlock ? 16 : LINE_BASE_HEIGHT);
+        height = getLineThicknessPx(marker.lineThickness, scale, isGridMode, gridSize, fallbackBasePx, modeS);
     }
 
     const width = previewSize ? '100%' : (isGridMode && gridSize ? (marker.length ?? 1) * gridSize : (marker.length ?? 1) * 60 * scale);
@@ -155,6 +169,7 @@ const LineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode,
             style={{ 
                 width: previewSize ? '100%' : `${width}px`, 
                 height: `${height}px`, 
+                boxSizing: 'border-box',
                 backgroundColor: (isBlock && !previewSize) ? 'transparent' : (marker.color || '#000'),
                 borderRadius: '0px',
                 transform: previewSize ? 'none' : `rotate(${marker.rotation ?? 0}deg)`,
@@ -171,7 +186,7 @@ const CrackLineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGrid
     const modeS = uiMode === 'field' ? 1.5 : 1.0;
     const width = previewSize ? '100%' : (isGridMode && gridSize ? (marker.length ?? 1) * gridSize : (marker.length ?? 1) * 60 * scale);
     const height = previewSize ? 14 : (isGridMode && gridSize ? gridSize * 0.5 : 16 * scale * modeS);
-    const strokeWidth = previewSize ? 3 : (marker.lineThickness ? marker.lineThickness * scale * modeS : 5 * scale * modeS);
+    const strokeWidth = previewSize ? 3 : getLineThicknessPx(marker.lineThickness, scale, isGridMode, gridSize, 5, modeS);
     
     return (
         <div style={{ width, height: `${height}px`, transform: previewSize ? 'none' : `rotate(${marker.rotation ?? 0}deg)`, transformOrigin: 'left center', opacity: isPreview ? 0.4 : 1 }}>
@@ -204,15 +219,10 @@ const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode,
     let borderWidth = isImpassable ? 0 : uiMode === 'field' ? 4 : 2;
     
     if (!isImpassable && !previewSize) {
-        if (marker.lineThickness) {
-            borderWidth = marker.lineThickness * scale * modeS;
-        } else {
-            if (isGridMode && gridSize) {
-                borderWidth = gridSize * 0.2 * modeS;
-            } else {
-                borderWidth = LINE_BASE_HEIGHT * scale * modeS;
-            }
-        }
+        const fallbackBasePx = isGridMode && gridSize
+            ? gridSize * 0.2 / getRenderUnit(scale, isGridMode, gridSize)
+            : LINE_BASE_HEIGHT;
+        borderWidth = getLineThicknessPx(marker.lineThickness, scale, isGridMode, gridSize, fallbackBasePx, modeS);
     } else if (previewSize) {
         borderWidth = 2;
     }
@@ -221,6 +231,7 @@ const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode,
         <div 
             className={`w-full h-full ${patternClass} ${borderStyleClass}`} 
             style={{ 
+                boxSizing: 'border-box',
                 backgroundColor: bgColor,
                 borderColor: isImpassable ? 'transparent' : (marker.color || (isDrilling ? '#3b82f6' : '#000')),
                 borderWidth: `${borderWidth}px`,
@@ -292,7 +303,9 @@ export const MarkerRenderer: React.FC<MarkerComponentProps> = (props) => {
         );
         default: 
             if (marker.type.startsWith('text_')) {
-                const s = props.previewSize ? (props.previewSize / 24) : props.scale;
+                const s = props.previewSize
+                    ? (props.previewSize / GRID_BASE_UNIT)
+                    : getRenderUnit(props.scale, props.isGridMode, props.gridSize);
                 const modeS = props.uiMode === 'field' ? 1.6 : 1.0;
                 const fontSize = props.isGridMode && props.gridSize && !props.previewSize 
                     ? props.gridSize * 0.5 * modeS
@@ -389,8 +402,9 @@ export const InteractiveMarker: React.FC<{
         const shouldSnap = def?.shouldSnap;
 
         if (isGridMode && shouldSnap) {
-            newX = snapToGrid(newX, containerWidth, gridSize, 2);
-            newY = snapToGrid(newY, logicalHeight, gridSize, 2);
+            const subdivisions = isLine || isArea ? GRID_DRAWING_SUBDIVISIONS : 2;
+            newX = snapToGrid(newX, containerWidth, gridSize, subdivisions);
+            newY = snapToGrid(newY, logicalHeight, gridSize, subdivisions);
         }
         
         onUpdateMarker(marker.id, { x: newX, y: newY });
@@ -409,7 +423,7 @@ export const InteractiveMarker: React.FC<{
     };
 
     const cursorClass = (toolMode === 'draw' || isPhotographyMode) ? 'cursor-crosshair-forced' : (toolMode === 'pan' ? 'cursor-grab' : 'cursor-crosshair-forced');
-    const touchPadding = state.uiMode === 'field' ? '20px' : '8px';
+    const touchPadding = isLine || isArea ? '0px' : (state.uiMode === 'field' ? '20px' : '8px');
 
     return (
         <div 

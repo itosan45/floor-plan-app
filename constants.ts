@@ -7,6 +7,7 @@ export type InteractionType = 'point' | 'line' | 'area' | 'photo_drag';
 // Grid configuration
 export const GRID_CELL_COUNT = 50;
 export const BASE_CONTAINER_WIDTH = 752;
+export const GRID_DRAWING_SUBDIVISIONS = 2; // 0.5マス = 455mm, 1マス = 910mm
 
 export interface MarkerDef {
     label: string;

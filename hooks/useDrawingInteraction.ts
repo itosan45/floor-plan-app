@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import type { Marker, MarkerType } from '../types';
-import { MARKER_DEFINITIONS, BASE_CONTAINER_WIDTH } from '../constants';
+import { MARKER_DEFINITIONS, BASE_CONTAINER_WIDTH, GRID_DRAWING_SUBDIVISIONS } from '../constants';
 import { getCanvasCoordinates, snapToGrid } from '../utils/coordinates';
 import { generateUniqueId } from '../utils/common';
 
@@ -64,13 +64,16 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
         return Math.max(-0.05, Math.min(1.05, val));
     };
 
-    const getSnappedPos = (rawX: number, rawY: number) => {
+    const getSnappedPos = (
+        rawX: number,
+        rawY: number,
+        subdivisions = 2
+    ) => {
         // 安全ガード: キャンバス幅が0の場合は計算をスキップ
         if (currentCanvasWidth <= 0) return { x: rawX, y: rawY };
 
-        // 0.5グリッド単位のスナップ
-        let x = snapToGrid(clampPos(rawX), currentCanvasWidth, gridSize, 2);
-        let y = snapToGrid(clampPos(rawY), logicalHeight, gridSize, 2);
+        let x = snapToGrid(clampPos(rawX), currentCanvasWidth, gridSize, subdivisions);
+        let y = snapToGrid(clampPos(rawY), logicalHeight, gridSize, subdivisions);
 
         return { x, y };
     };
@@ -101,7 +104,10 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
             }
 
             const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
-            const { x, y } = getSnappedPos(rawX, rawY);
+            const snapSubdivisions = markerDef.interaction === 'line' || markerDef.interaction === 'area'
+                ? GRID_DRAWING_SUBDIVISIONS
+                : 2;
+            const { x, y } = getSnappedPos(rawX, rawY, snapSubdivisions);
 
             const isDragRequired = 
                 markerDef.interaction === 'line' || markerDef.interaction === 'area' || 
@@ -142,7 +148,10 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
             const type = drawingDataRef.current.type;
             const def = MARKER_DEFINITIONS[type];
             
-            const { x: snapX, y: snapY } = getSnappedPos(rawX, rawY);
+            const snapSubdivisions = def.interaction === 'line' || def.interaction === 'area'
+                ? GRID_DRAWING_SUBDIVISIONS
+                : 2;
+            const { x: snapX, y: snapY } = getSnappedPos(rawX, rawY, snapSubdivisions);
             let x = def.shouldSnap ? snapX : clampPos(rawX);
             let y = def.shouldSnap ? snapY : clampPos(rawY);
 
@@ -235,7 +244,11 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
                 return false;
             }
             
-            const { x, y } = getSnappedPos(rawX, rawY);
+            const def = MARKER_DEFINITIONS[activeType];
+            const snapSubdivisions = def.interaction === 'line' || def.interaction === 'area'
+                ? GRID_DRAWING_SUBDIVISIONS
+                : 2;
+            const { x, y } = getSnappedPos(rawX, rawY, snapSubdivisions);
 
             if (isPhotographyMode && !isManualCameraMode) {
                 onPhotoMarkerPlaced({ x, y, rotation: 0, length: 1.0 });

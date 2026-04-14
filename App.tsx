@@ -15,6 +15,7 @@ import { resizeImage, loadHtml2Canvas, captureAndGenerateA4 } from './utils/imag
 import { calculateMarkersBoundingBox } from './utils/geometry';
 import { useDrawingInteraction } from './hooks/useDrawingInteraction';
 import { useVoiceInteraction } from './hooks/useVoiceInteraction';
+import { GRID_CELL_COUNT } from './constants';
 
 export const App: React.FC = () => {
     const { state, actions } = useEditorState();
@@ -199,7 +200,7 @@ export const App: React.FC = () => {
                     }} 
                     onStartWithGrid={() => {
                         actions.setIsGridMode(true); actions.setFloorPlanWidth(1200);
-                        actions.setFloorPlanAspectRatio(1); actions.setWorkflowStep('floor_drafting');
+                        actions.setFloorPlanAspectRatio(1); actions.setGridSize(1200 / GRID_CELL_COUNT); actions.setWorkflowStep('floor_drafting');
                     }}
                     onStartTutorial={actions.startTutorial}
                     toggleFullscreen={actions.toggleFullscreen} isFullscreen={state.isFullscreen}
