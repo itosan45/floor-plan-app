@@ -48,7 +48,7 @@ npm run apk:debug
 - ローカルで APK を作るには `npm run apk:debug` を実行します。
 - 生成物は `android/app/build/outputs/apk/debug/app-debug.apk` に出力されます。
 - GitHub Releases 配布は `.github/workflows/android-release.yml` で自動化しています。
-- `v1.1.0` のようなタグを push すると、GitHub Actions が APK を生成し、Release に `floor-plan-editor-v1.1.0.apk` を添付します。
+- `v1.1.1` のようなタグを push すると、GitHub Actions が APK を生成し、Release に `floor-plan-editor-v1.1.1.apk` を添付します。
 - 現状は debug 署名 APK を配布します。Android 端末には通常どおりダウンロードしてインストールできます。
 
 ## 実運用メモ
@@ -61,6 +61,6 @@ npm run apk:debug
 ## GitHub Release 作成
 
 1. `git push origin codex/apk-release`
-2. `git tag v1.1.0`
-3. `git push origin v1.1.0`
+2. `git tag v1.1.1`
+3. `git push origin v1.1.1`
 4. GitHub の Release 一覧に APK 添付済みの公開リリースが自動作成されます。
