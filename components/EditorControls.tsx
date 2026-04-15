@@ -8,6 +8,51 @@ import {
 } from './icons';
 import { APP_INFO } from '../constants';
 
+// --- Photo Marker Size Control ---
+interface PhotoMarkerSizeControlProps {
+    photoMarkerScale: number;
+    setPhotoMarkerScale: (scale: number) => void;
+    uiMode: 'office' | 'field';
+}
+
+const PHOTO_MARKER_SCALE_MIN = 0.5;
+const PHOTO_MARKER_SCALE_MAX = 3.0;
+const PHOTO_MARKER_SCALE_STEP = 0.25;
+
+const clampMarkerScale = (value: number) => Math.round(value * 100) / 100;
+
+export const PhotoMarkerSizeControl: React.FC<PhotoMarkerSizeControlProps> = ({ photoMarkerScale, setPhotoMarkerScale, uiMode }) => {
+    const isField = uiMode === 'field';
+    const btnSize = isField ? 'w-12 h-12 text-xl' : 'w-9 h-9 text-base';
+    const labelSize = isField ? 'text-[11px]' : 'text-[9px]';
+
+    const decrease = () => setPhotoMarkerScale(Math.max(PHOTO_MARKER_SCALE_MIN, clampMarkerScale(photoMarkerScale - PHOTO_MARKER_SCALE_STEP)));
+    const increase = () => setPhotoMarkerScale(Math.min(PHOTO_MARKER_SCALE_MAX, clampMarkerScale(photoMarkerScale + PHOTO_MARKER_SCALE_STEP)));
+
+    return (
+        <div className="bg-gray-950/90 backdrop-blur-md p-1.5 rounded-2xl shadow-2xl border border-gray-800 flex flex-col gap-1 items-center">
+            <span className={`${labelSize} font-black text-gray-400 uppercase tracking-widest`}>📷</span>
+            <button
+                onClick={increase}
+                disabled={photoMarkerScale >= PHOTO_MARKER_SCALE_MAX}
+                className={`${btnSize} flex items-center justify-center rounded-xl font-black text-gray-300 active:bg-gray-700 disabled:opacity-20 transition-all`}
+                aria-label="マーカーサイズを大きくする"
+            >
+                ＋
+            </button>
+            <span className={`${labelSize} font-black text-indigo-400 tabular-nums`}>{photoMarkerScale.toFixed(2)}x</span>
+            <button
+                onClick={decrease}
+                disabled={photoMarkerScale <= PHOTO_MARKER_SCALE_MIN}
+                className={`${btnSize} flex items-center justify-center rounded-xl font-black text-gray-300 active:bg-gray-700 disabled:opacity-20 transition-all`}
+                aria-label="マーカーサイズを小さくする"
+            >
+                −
+            </button>
+        </div>
+    );
+};
+
 // --- Orientation Warning ---
 interface OrientationWarningProps {
     onForceLandscape?: () => void;

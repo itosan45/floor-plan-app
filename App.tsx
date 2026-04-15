@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useEditorState } from './hooks/useEditorState';
 import { Sidebar } from './components/Sidebar';
 import { EditorCanvas } from './components/EditorCanvas';
-import { WelcomeScreen, FloatingToolbar, OrientationWarning } from './components/EditorControls';
+import { WelcomeScreen, FloatingToolbar, OrientationWarning, PhotoMarkerSizeControl } from './components/EditorControls';
 import { HelpModal } from './components/HelpModal';
 import { ReportModal } from './components/ReportModal';
 import { CameraModal } from './components/CameraModal';
@@ -247,6 +247,13 @@ export const App: React.FC = () => {
                     onPointerMove={handlePointerMove} onPointerUp={handlePointerEnd}
                 />
                 <FloatingToolbar state={state} actions={actions} handleZoom={handleZoom} resetView={fitToScreen} stopEventPropagation={(e) => e.stopPropagation()} removeLastMarker={actions.removeLastMarker} hasMarkers={markers.length > 0} />
+                <div className="absolute bottom-4 right-2 z-40 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>
+                    <PhotoMarkerSizeControl
+                        photoMarkerScale={state.photoMarkerScale}
+                        setPhotoMarkerScale={actions.setPhotoMarkerScale}
+                        uiMode={state.uiMode}
+                    />
+                </div>
             </main>
             <HelpModal isOpen={activeModal === 'help'} onClose={() => actions.setActiveModal('none')} />
             <ReportModal isOpen={activeModal === 'report'} state={state} onClose={() => actions.setActiveModal('none')} />
