@@ -85,9 +85,12 @@ const CommentBoxMarker: React.FC<MarkerComponentProps> = ({ marker, scale, previ
 };
 
 const PhotoMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGridMode, gridSize, previewSize, isPreview, uiMode }) => {
-    const baseSize = uiMode === 'field' ? 36 : 24;
+    const { state } = useEditorContext();
+    const photoMarkerScale = previewSize ? 1.0 : state.photoMarkerScale;
+    const rawBaseSize = uiMode === 'field' ? 36 : 24;
+    const baseSize = rawBaseSize * photoMarkerScale;
     const markerSize = getSize(scale, isGridMode, gridSize, baseSize, previewSize, uiMode);
-    const s = previewSize ? (previewSize / baseSize) : scale;
+    const s = previewSize ? (previewSize / rawBaseSize) : scale;
     
     const arrowLength = (marker.length ?? 1.0) * (isGridMode && gridSize ? gridSize : 40 * s);
     const strokeWidth = (isGridMode && gridSize && !previewSize) ? Math.max(3, gridSize/7) : 5 * s;

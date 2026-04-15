@@ -23,6 +23,7 @@ export interface EditorState {
     gridSize: number;
     currentLineThickness: number;
     currentLineColor: string;
+    photoMarkerScale: number;
     cameraTapPosition: { x: number; y: number } | null;
     activePhotoIndex: number;
     selectedMarkerId: string | null;
@@ -56,6 +57,7 @@ export interface EditorActions {
     setGridSize: (size: number) => void;
     setCurrentLineThickness: (val: number) => void;
     setCurrentLineColor: (color: string) => void;
+    setPhotoMarkerScale: (scale: number) => void;
     setCameraTapPosition: (pos: { x: number; y: number } | null) => void;
     addCapturedPhoto: (photo: Photo) => void;
     setActivePhotoIndex: (index: number) => void;
@@ -99,6 +101,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [gridSize, setGridSize] = useState<number>(40);
     const [currentLineThickness, setCurrentLineThickness] = useState<number>(5);
     const [currentLineColor, setCurrentLineColor] = useState<string>('#0044cc');
+    const [photoMarkerScale, setPhotoMarkerScale] = useState<number>(1.0);
     const [cameraTapPosition, setCameraTapPosition] = useState<{ x: number; y: number } | null>(null);
     const [capturedPhotos, setCapturedPhotos] = useState<Photo[]>([]);
     const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -316,6 +319,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const state: EditorState = {
         workflowStep, tutorialStep, uiMode, isGridPanelOpen, isFullscreen, activeModal,
         appMode, activeTab, currentMarkerType, gridSize, currentLineThickness, currentLineColor,
+        photoMarkerScale,
         cameraTapPosition, activePhotoIndex, selectedMarkerId, isTrimming, isExporting, statusMessage,
         floorPlanImage, floorPlanRotation, floorPlanWidth, floorPlanAspectRatio, isGridMode, markers, capturedPhotos,
         photoLibrary, pendingPhotoIds, selectedPhotoId, pendingRoom
@@ -324,6 +328,7 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const actions: EditorActions = useMemo(() => ({
         setWorkflowStep, setTutorialStep, setUiMode, nextStep, setIsGridPanelOpen, toggleFullscreen, setActiveModal,
         setAppMode, setActiveTab, setCurrentMarkerType, setGridSize, setCurrentLineThickness, setCurrentLineColor,
+        setPhotoMarkerScale,
         setCameraTapPosition, addCapturedPhoto, setActivePhotoIndex,
         setSelectedMarkerId, setIsTrimming, setIsExporting, showStatus,
         setFloorPlanImage, setFloorPlanRotation, setFloorPlanWidth, setFloorPlanAspectRatio, setIsGridMode,
