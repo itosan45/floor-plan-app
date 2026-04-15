@@ -1,10 +1,11 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Camera } from '@capacitor/camera';
 import { Photo } from '../types';
 import { generateUniqueId } from '../utils/common';
 import { XMarkIcon, CameraIcon } from './icons';
+import { blobToDataUrl } from '../utils/imageProcessing';
 
 interface CameraModalProps {
     isOpen: boolean;
@@ -28,16 +29,26 @@ export const CameraModal: React.FC<CameraModalProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
 
-    useEffect(() => {
-        if (isOpen) {
-            if (!isNativePlatform) {
-                void startCamera();
-            }
-        } else {
-            stopCamera();
+    const buildCapturedPhoto = useCallback(async (source: { dataUrl?: string; webPath?: string; path?: string }) => {
+        if (source.dataUrl) {
+            const blob = await fetch(source.dataUrl).then(response => response.blob());
+            return { blob, dataUrl: source.dataUrl };
         }
-        return () => stopCamera();
-    }, [isOpen, isNativePlatform]);
+
+        const assetUrl = source.webPath ?? source.path;
+        if (!assetUrl) {
+            throw new Error('撮影結果の保存先が取得できませんでした');
+        }
+
+        const response = await fetch(assetUrl);
+        if (!response.ok) {
+            throw new Error('撮影画像の読み込みに失敗しました');
+        }
+
+        const blob = await response.blob();
+        const dataUrl = await blobToDataUrl(blob);
+        return { blob, dataUrl };
+    }, []);
 
     const startCamera = async () => {
         try {
@@ -71,23 +82,22 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         setIsCapturing(true);
 
         try {
-            const result = await Camera.getPhoto({
-                source: CameraSource.Camera,
-                resultType: CameraResultType.DataUrl,
+            await Camera.requestPermissions({ permissions: ['camera'] });
+
+            const result = await Camera.takePhoto({
                 quality: 80,
+                saveToGallery: false,
+                correctOrientation: true,
+                editable: 'no',
             });
 
-            if (!result.dataUrl) {
-                throw new Error('撮影結果の取得に失敗しました');
-            }
-
-            const blob = await fetch(result.dataUrl).then(response => response.blob());
+            const { blob, dataUrl } = await buildCapturedPhoto(result);
             const label = `${photoCount + 1} 点検箇所`;
 
             onCapture({
                 id: generateUniqueId(),
                 blob,
-                dataUrl: result.dataUrl,
+                dataUrl,
                 label,
                 timestamp: new Date().toLocaleString('ja-JP'),
             });
@@ -98,10 +108,24 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 console.error('Native camera capture error:', err);
                 alert('カメラの起動に失敗しました。端末の権限設定を確認してください。');
             }
+            onClose();
         } finally {
             setIsCapturing(false);
         }
-    }, [isCapturing, onCapture, onClose, photoCount]);
+    }, [buildCapturedPhoto, isCapturing, onCapture, onClose, photoCount]);
+
+    useEffect(() => {
+        if (isOpen) {
+            if (isNativePlatform) {
+                void capturePhotoNative();
+            } else {
+                void startCamera();
+            }
+        } else {
+            stopCamera();
+        }
+        return () => stopCamera();
+    }, [capturePhotoNative, isOpen, isNativePlatform]);
 
     const capturePhoto = useCallback(() => {
         if (isNativePlatform) {
@@ -180,12 +204,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({
                 {isNativePlatform ? (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-8 text-center text-white">
                         <div className="rounded-full bg-white/10 p-6">
-                            <CameraIcon className="h-16 w-16 text-white" />
+                            {isCapturing
+                                ? <div className="h-16 w-16 animate-spin rounded-full border-4 border-white border-t-transparent" />
+                                : <CameraIcon className="h-16 w-16 text-white" />}
                         </div>
                         <div className="space-y-2">
-                            <p className="text-2xl font-black tracking-tight">システムカメラを起動</p>
+                            <p className="text-2xl font-black tracking-tight">システムカメラを起動中</p>
                             <p className="text-sm font-bold text-white/70">
-                                シャッターボタンを押すと端末のカメラを開きます。
+                                撮影後にチェックを押すと、この図面へ自動で戻って記録します。
                             </p>
                         </div>
                     </div>
@@ -211,15 +237,25 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             {/* Controls */}
             <div className="h-40 bg-black flex justify-center items-center relative z-20 px-10">
                 <div className="flex-1" />
-                <button 
-                    onClick={capturePhoto} 
-                    disabled={isCapturing}
-                    className={`w-24 h-24 rounded-full border-8 transition-all active:scale-90 disabled:opacity-50 ${isCapturing ? 'border-gray-600' : 'border-white'}`}
-                >
-                    <div className="w-full h-full rounded-full bg-red-600 flex items-center justify-center border-4 border-black">
-                        {isCapturing ? <div className="animate-spin w-8 h-8 border-4 border-white border-t-transparent rounded-full" /> : <CameraIcon className="w-10 h-10 text-white" />}
-                    </div>
-                </button>
+                {isNativePlatform ? (
+                    <button
+                        onClick={() => void capturePhotoNative()}
+                        disabled={isCapturing}
+                        className="rounded-2xl border border-white/15 bg-white/10 px-6 py-4 text-sm font-black text-white transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {isCapturing ? 'カメラ起動中...' : 'もう一度カメラを開く'}
+                    </button>
+                ) : (
+                    <button 
+                        onClick={capturePhoto} 
+                        disabled={isCapturing}
+                        className={`w-24 h-24 rounded-full border-8 transition-all active:scale-90 disabled:opacity-50 ${isCapturing ? 'border-gray-600' : 'border-white'}`}
+                    >
+                        <div className="w-full h-full rounded-full bg-red-600 flex items-center justify-center border-4 border-black">
+                            {isCapturing ? <div className="animate-spin w-8 h-8 border-4 border-white border-t-transparent rounded-full" /> : <CameraIcon className="w-10 h-10 text-white" />}
+                        </div>
+                    </button>
+                )}
                 <div className="flex-1" />
             </div>
         </div>
