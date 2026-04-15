@@ -1,6 +1,6 @@
 {
   "name": "floor-plan-editor-app",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "住宅平面図をアップロードし、マーカーを配置して図面を作成、JPEG画像としてエクスポートできるアプリケーションです。",
   "private": true,
   "scripts": {
@@ -19,9 +19,12 @@
     "@capacitor/android": "^8.3.0",
     "@capacitor/camera": "^8.0.2",
     "@capacitor/core": "^8.3.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
     "@google/genai": "^1.42.0",
     "express": "^4.19.2",
     "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

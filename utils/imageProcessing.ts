@@ -1,4 +1,8 @@
 
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { jsPDF } from 'jspdf';
+
 // Helper to load html2canvas library
 let html2canvasPromise: Promise<void> | null = null;
 
@@ -93,6 +97,159 @@ export const blobToDataUrl = (blob: Blob): Promise<string> => {
   });
 };
 
+const blobToBase64 = async (blob: Blob): Promise<string> => {
+  const dataUrl = await blobToDataUrl(blob);
+  const base64 = dataUrl.split(',')[1];
+  if (!base64) {
+    throw new Error('Failed to convert blob to base64');
+  }
+  return base64;
+};
+
+export const saveBlobToDevice = async (
+  blob: Blob,
+  fileName: string
+): Promise<{ uri: string; mode: 'native' | 'web' }> => {
+  if (!Capacitor.isNativePlatform()) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return { uri: fileName, mode: 'web' };
+  }
+
+  await Filesystem.requestPermissions();
+  const base64 = await blobToBase64(blob);
+  const result = await Filesystem.writeFile({
+    path: fileName,
+    data: base64,
+    directory: Directory.Documents,
+    recursive: true,
+  });
+
+  return { uri: result.uri, mode: 'native' };
+};
+
+export const renderElementToCanvas = async (element: HTMLElement, scale = 2): Promise<HTMLCanvasElement> => {
+  await loadHtml2Canvas();
+  return (window as unknown as { html2canvas: (element: HTMLElement, options: unknown) => Promise<HTMLCanvasElement> }).html2canvas(element, {
+    scale,
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    windowWidth: element.scrollWidth,
+    windowHeight: element.scrollHeight,
+  });
+};
+
+export const exportElementsToPdfBlob = async (elements: HTMLElement[]): Promise<Blob> => {
+  if (elements.length === 0) {
+    throw new Error('PDF出力対象がありません');
+  }
+
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'a4',
+    compress: true,
+  });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  for (let i = 0; i < elements.length; i += 1) {
+    const canvas = await renderElementToCanvas(elements[i], 2);
+    const imageData = canvas.toDataURL('image/jpeg', 0.92);
+
+    if (i > 0) {
+      pdf.addPage('a4', 'portrait');
+    }
+
+    pdf.addImage(imageData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
+  return pdf.output('blob');
+};
+
+export const captureA4JpegBlob = async (
+  element: HTMLElement,
+  cropRect: { x: number; y: number; w: number; h: number }
+): Promise<Blob> => {
+  await loadHtml2Canvas();
+  const captureWidth = element.scrollWidth;
+  const captureHeight = element.scrollHeight;
+  
+  const cropX = Math.round(cropRect.x * captureWidth);
+  const cropY = Math.round(cropRect.y * captureHeight);
+  const cropWidth = Math.round(cropRect.w * captureWidth);
+  const cropHeight = Math.round(cropRect.h * captureHeight);
+
+  const sourceCanvas = await (window as unknown as { html2canvas: (element: HTMLElement, options: unknown) => Promise<HTMLCanvasElement> }).html2canvas(element, {
+    scale: 2.0, 
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    x: cropX,
+    y: cropY,
+    width: cropWidth,
+    height: cropHeight,
+    windowWidth: captureWidth, 
+    windowHeight: captureHeight
+  });
+
+  const a4Width = 3508;
+  const a4Height = 2480;
+  const destinationCanvas = document.createElement('canvas');
+  destinationCanvas.width = a4Width;
+  destinationCanvas.height = a4Height;
+  const ctx = destinationCanvas.getContext('2d');
+  
+  if (!ctx) throw new Error('Could not get context');
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, a4Width, a4Height);
+  
+  const sourceRatio = sourceCanvas.width / sourceCanvas.height;
+  const targetRatio = a4Width / a4Height;
+  
+  let drawWidth, drawHeight;
+  if (sourceRatio > targetRatio) {
+      drawWidth = a4Width;
+      drawHeight = a4Width / sourceRatio;
+  } else {
+      drawHeight = a4Height;
+      drawWidth = a4Height * sourceRatio;
+  }
+  
+  const drawX = (a4Width - drawWidth) / 2;
+  const drawY = (a4Height - drawHeight) / 2;
+  
+  ctx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, drawX, drawY, drawWidth, drawHeight);
+
+  return new Promise<Blob>((resolve, reject) => {
+    destinationCanvas.toBlob((blob) => {
+      try {
+        if (!blob) {
+          reject(new Error('JPEG generation failed'));
+          return;
+        }
+
+        resolve(blob);
+      } finally {
+        sourceCanvas.width = 0;
+        sourceCanvas.height = 0;
+        destinationCanvas.width = 0;
+        destinationCanvas.height = 0;
+      }
+    }, 'image/jpeg', 0.88);
+  });
+};
+
 /**
  * html2canvasでキャプチャし、Blobとして保存する
  */
@@ -100,80 +257,6 @@ export const captureAndGenerateA4 = async (
     element: HTMLElement,
     cropRect: { x: number; y: number; w: number; h: number }
 ): Promise<void> => {
-    const captureWidth = element.scrollWidth;
-    const captureHeight = element.scrollHeight;
-    
-    const cropX = Math.round(cropRect.x * captureWidth);
-    const cropY = Math.round(cropRect.y * captureHeight);
-    const cropWidth = Math.round(cropRect.w * captureWidth);
-    const cropHeight = Math.round(cropRect.h * captureHeight);
-
-    // スケールを2.0に設定し、レンダリング精度を確保
-    const sourceCanvas = await (window as unknown as { html2canvas: (element: HTMLElement, options: unknown) => Promise<HTMLCanvasElement> }).html2canvas(element, {
-        scale: 2.0, 
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        x: cropX,
-        y: cropY,
-        width: cropWidth,
-        height: cropHeight,
-        windowWidth: captureWidth, 
-        windowHeight: captureHeight
-    });
-
-    const a4Width = 3508;
-    const a4Height = 2480;
-    const destinationCanvas = document.createElement('canvas');
-    destinationCanvas.width = a4Width;
-    destinationCanvas.height = a4Height;
-    const ctx = destinationCanvas.getContext('2d');
-    
-    if (!ctx) throw new Error('Could not get context');
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, a4Width, a4Height);
-    
-    const sourceRatio = sourceCanvas.width / sourceCanvas.height;
-    const targetRatio = a4Width / a4Height;
-    
-    let drawWidth, drawHeight;
-    if (sourceRatio > targetRatio) {
-        drawWidth = a4Width;
-        drawHeight = a4Width / sourceRatio;
-    } else {
-        drawHeight = a4Height;
-        drawWidth = a4Height * sourceRatio;
-    }
-    
-    const drawX = (a4Width - drawWidth) / 2;
-    const drawY = (a4Height - drawHeight) / 2;
-    
-    ctx.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, drawX, drawY, drawWidth, drawHeight);
-
-    await new Promise<void>((resolve, reject) => {
-        destinationCanvas.toBlob((blob) => {
-            try {
-                if (!blob) {
-                    reject(new Error('JPEG generation failed'));
-                    return;
-                }
-
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `floor_plan_A4_${Date.now()}.jpeg`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                resolve();
-            } finally {
-                sourceCanvas.width = 0;
-                sourceCanvas.height = 0;
-                destinationCanvas.width = 0;
-                destinationCanvas.height = 0;
-            }
-        }, 'image/jpeg', 0.6);
-    });
+    const blob = await captureA4JpegBlob(element, cropRect);
+    await saveBlobToDevice(blob, `floor_plan_A4_${Date.now()}.jpeg`);
 };

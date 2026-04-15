@@ -397,7 +397,7 @@ export const App: React.FC = () => {
                 <FloatingToolbar state={state} actions={actions} handleZoom={handleZoom} resetView={fitToScreen} stopEventPropagation={(e) => e.stopPropagation()} removeLastMarker={actions.removeLastMarker} hasMarkers={markers.length > 0} />
             </main>
             <HelpModal isOpen={activeModal === 'help'} onClose={() => actions.setActiveModal('none')} />
-            <ReportModal isOpen={activeModal === 'report'} state={state} onClose={() => actions.setActiveModal('none')} />
+            <ReportModal isOpen={activeModal === 'report'} state={state} onClose={() => actions.setActiveModal('none')} onStatus={actions.showStatus} />
             <CameraModal
                 isOpen={activeModal === 'camera'}
                 onClose={() => {

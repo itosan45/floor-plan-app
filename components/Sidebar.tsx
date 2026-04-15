@@ -69,6 +69,70 @@ const PhotoLibraryPanel: React.FC<{
             .filter(type => MARKER_DEFINITIONS[type].category === 'name')
             .map(type => MARKER_DEFINITIONS[type].label);
     }, []);
+    const pendingPhotoSet = useMemo(() => new Set(pendingPhotoIds), [pendingPhotoIds]);
+    const placedPhotoIds = useMemo(() => {
+        return Object.keys(photoLibrary).filter(id => !pendingPhotoSet.has(id));
+    }, [photoLibrary, pendingPhotoSet]);
+
+    const renderPhotoCard = (id: string, isPending: boolean) => {
+        const photo = photoLibrary[id];
+        if (!photo) return null;
+        const isSelected = selectedPhotoId === id;
+        return (
+            <div 
+                key={id}
+                onClick={() => setSelectedPhotoId(isSelected ? null : id)}
+                className={`group relative bg-white rounded-xl border-2 transition-all cursor-pointer overflow-hidden ${isSelected ? 'border-indigo-600 shadow-lg ring-2 ring-indigo-200' : 'border-gray-200 hover:border-gray-300'}`}
+            >
+                <div className="flex p-2 gap-3">
+                    <div className="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden relative border border-gray-100">
+                        <img src={photo.dataUrl} className="w-full h-full object-cover" alt={photo.label} />
+                        {isSelected && (
+                            <div className="absolute inset-0 bg-indigo-600/20 flex items-center justify-center">
+                                <div className="bg-indigo-600 text-white p-1 rounded-full"><BoltIcon className="w-4 h-4 animate-pulse" /></div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-2 min-w-0">
+                        <div className="relative">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">ラベル名 (報告書・ファイル名)</label>
+                            <input 
+                                type="text"
+                                className="w-full bg-gray-50 text-xs font-bold text-gray-800 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-200 rounded px-2 py-1.5 border border-gray-200"
+                                value={photo.label}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => updatePhotoLabel(id, e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">プリセット名称</label>
+                            <select
+                                className="w-full text-[10px] font-bold bg-white border border-gray-300 rounded px-1.5 py-1 text-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                                onClick={e => e.stopPropagation()}
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        updatePhotoLabel(id, e.target.value);
+                                    }
+                                }}
+                                defaultValue=""
+                            >
+                                <option value="" disabled>名前を選択してリネーム...</option>
+                                {presetNames.map(name => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div className="px-2 pb-2 flex items-center justify-between">
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${isPending ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {isPending ? '未配置' : '配置済み'}
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-mono">{photo.timestamp}</span>
+                </div>
+            </div>
+        );
+    };
 
     const handleAddPhotos = async () => {
         if (!isNativePlatform) {
@@ -142,68 +206,40 @@ const PhotoLibraryPanel: React.FC<{
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 custom-scrollbar space-y-4 bg-gray-100/50">
-                {pendingPhotoIds.length === 0 ? (
+                {Object.keys(photoLibrary).length === 0 ? (
                     <div className="py-20 text-center text-gray-400">
                         <PhotoIcon className="w-10 h-10 mx-auto opacity-20 mb-2" />
-                        <p className="text-[10px] font-bold">未配置の写真はありません</p>
+                        <p className="text-[10px] font-bold">写真はまだありません</p>
                     </div>
                 ) : (
-                    pendingPhotoIds.map(id => {
-                        const photo = photoLibrary[id];
-                        if (!photo) return null;
-                        const isSelected = selectedPhotoId === id;
-                        return (
-                            <div 
-                                key={id}
-                                onClick={() => setSelectedPhotoId(isSelected ? null : id)}
-                                className={`group relative bg-white rounded-xl border-2 transition-all cursor-pointer overflow-hidden ${isSelected ? 'border-indigo-600 shadow-lg ring-2 ring-indigo-200' : 'border-gray-200 hover:border-gray-300'}`}
-                            >
-                                <div className="flex p-2 gap-3">
-                                    <div className="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden relative border border-gray-100">
-                                        <img src={photo.dataUrl} className="w-full h-full object-cover" alt={photo.label} />
-                                        {isSelected && (
-                                            <div className="absolute inset-0 bg-indigo-600/20 flex items-center justify-center">
-                                                <div className="bg-indigo-600 text-white p-1 rounded-full"><BoltIcon className="w-4 h-4 animate-pulse" /></div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 flex flex-col gap-2 min-w-0">
-                                        <div className="relative">
-                                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">ラベル名 (報告書・ファイル名)</label>
-                                            <input 
-                                                type="text"
-                                                className="w-full bg-gray-50 text-xs font-bold text-gray-800 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-200 rounded px-2 py-1.5 border border-gray-200"
-                                                value={photo.label}
-                                                onClick={e => e.stopPropagation()}
-                                                onChange={e => updatePhotoLabel(id, e.target.value)}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">プリセット名称</label>
-                                            <select
-                                                className="w-full text-[10px] font-bold bg-white border border-gray-300 rounded px-1.5 py-1 text-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                                                onClick={e => e.stopPropagation()}
-                                                onChange={(e) => {
-                                                    if (e.target.value) {
-                                                        updatePhotoLabel(id, e.target.value);
-                                                    }
-                                                }}
-                                                defaultValue=""
-                                            >
-                                                <option value="" disabled>名前を選択してリネーム...</option>
-                                                {presetNames.map(name => (
-                                                    <option key={name} value={name}>{name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="px-2 pb-1 text-right">
-                                     <span className="text-[9px] text-gray-400 font-mono">{photo.timestamp}</span>
-                                </div>
+                    <>
+                        <div>
+                            <div className="mb-2 flex items-center justify-between">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">未配置</h4>
+                                <span className="text-[10px] font-black text-amber-600">{pendingPhotoIds.length}</span>
                             </div>
-                        );
-                    })
+                            <div className="space-y-4">
+                                {pendingPhotoIds.length > 0 ? pendingPhotoIds.map(id => renderPhotoCard(id, true)) : (
+                                    <div className="rounded-xl border border-dashed border-gray-300 bg-white/70 px-3 py-4 text-center text-[10px] font-bold text-gray-400">
+                                        未配置の写真はありません
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="mb-2 mt-5 flex items-center justify-between">
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">配置済み</h4>
+                                <span className="text-[10px] font-black text-emerald-600">{placedPhotoIds.length}</span>
+                            </div>
+                            <div className="space-y-4">
+                                {placedPhotoIds.length > 0 ? placedPhotoIds.map(id => renderPhotoCard(id, false)) : (
+                                    <div className="rounded-xl border border-dashed border-gray-300 bg-white/70 px-3 py-4 text-center text-[10px] font-bold text-gray-400">
+                                        まだ配置済み写真はありません
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </>
                 )}
             </div>
         </div>

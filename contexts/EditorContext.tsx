@@ -228,7 +228,10 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const addPhotosToLibrary = useCallback(async (files: FileList | File[]) => {
         const fileList = Array.from(files);
-        showStatus(`${fileList.length}枚の写真を読み込み中...`, "info");
+        if (fileList.length === 0) return;
+
+        const startedAt = Date.now();
+        showStatus(`0 / ${fileList.length} 枚の写真を読み込み中... 0秒`, "info", 15000);
         const newIds: string[] = [];
         const newPhotos: Record<string, Photo> = {};
         for (let i = 0; i < fileList.length; i++) {
@@ -239,6 +242,8 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 newIds.push(id);
                 const label = file.name.replace(/\.[^/.]+$/, "");
                 newPhotos[id] = { id, blob, dataUrl, label, timestamp: new Date(file.lastModified).toLocaleString('ja-JP') };
+                const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+                showStatus(`${i + 1} / ${fileList.length} 枚の写真を読み込み中... ${elapsedSeconds}秒`, "info", 15000);
             } catch (err) { console.error("Image processing error", err); }
         }
         setPhotoLibrary(prev => ({ ...prev, ...newPhotos }));
@@ -250,7 +255,8 @@ export const EditorProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setAppMode('draw');
             setCurrentMarkerType('photo');
             setActiveTab('inspection');
-            showStatus("写真を追加しました。配置を開始してください。", "success");
+            const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+            showStatus(`${newIds.length}枚の写真を追加しました。配置を開始してください。(${elapsedSeconds}秒)`, "success");
         } else {
             showStatus("写真をライブラリに追加しました", "success");
         }
