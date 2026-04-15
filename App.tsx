@@ -1,5 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { Camera } from '@capacitor/camera';
 import { useEditorState } from './hooks/useEditorState';
 import { Sidebar } from './components/Sidebar';
 import { EditorCanvas } from './components/EditorCanvas';
@@ -26,6 +27,47 @@ export const App: React.FC = () => {
     const [gridDataUrl, setGridDataUrl] = useState('');
     const [showOrientationWarning, setShowOrientationWarning] = useState(false);
     const [tempImageData, setTempImageData] = useState<{ dataUrl: string, blob: Blob } | null>(null);
+
+    const prepareFloorPlanPreview = useCallback(async (blob: Blob) => {
+        const extension = blob.type.includes('png') ? 'png' : 'jpg';
+        const file = new File([blob], `floor-plan-capture.${extension}`, {
+            type: blob.type || 'image/jpeg',
+            lastModified: Date.now(),
+        });
+        const { dataUrl, blob: resizedBlob } = await resizeImage(file);
+        setTempImageData({ dataUrl, blob: resizedBlob });
+    }, []);
+
+    const handleCaptureFloorPlan = useCallback(async () => {
+        try {
+            await Camera.requestPermissions({ permissions: ['camera'] });
+            const result = await Camera.takePhoto({
+                quality: 90,
+                saveToGallery: false,
+                correctOrientation: true,
+                editable: 'no',
+            });
+
+            const assetUrl = result.webPath ?? result.uri;
+            if (!assetUrl) {
+                throw new Error('撮影画像の取得に失敗しました');
+            }
+
+            const response = await fetch(assetUrl);
+            if (!response.ok) {
+                throw new Error('撮影画像の読み込みに失敗しました');
+            }
+
+            const blob = await response.blob();
+            await prepareFloorPlanPreview(blob);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '';
+            if (!/cancel/i.test(message)) {
+                console.error('Floor plan capture error:', error);
+                actions.showStatus('図面撮影の起動に失敗しました', 'error');
+            }
+        }
+    }, [actions, prepareFloorPlanPreview]);
 
     const { 
         floorPlanImage, floorPlanRotation, isGridMode, appMode, activeModal, markers,
@@ -198,6 +240,7 @@ export const App: React.FC = () => {
                         const { dataUrl, blob } = await resizeImage(file);
                         setTempImageData({ dataUrl, blob });
                     }} 
+                    onCaptureFloorPlan={() => { void handleCaptureFloorPlan(); }}
                     onStartWithGrid={() => {
                         actions.setIsGridMode(true); actions.setFloorPlanWidth(1200);
                         actions.setFloorPlanAspectRatio(1); actions.setGridSize(1200 / GRID_CELL_COUNT); actions.setWorkflowStep('floor_drafting');

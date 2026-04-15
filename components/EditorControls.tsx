@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { Capacitor } from '@capacitor/core';
 import { EditorState, EditorActions } from '../hooks/useEditorState';
 import { 
     MaximizeIcon, PencilIcon, HandIcon, 
@@ -29,6 +30,7 @@ export const OrientationWarning: React.FC<OrientationWarningProps> = ({ onForceL
 // --- Welcome Screen ---
 interface WelcomeScreenProps {
     onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onCaptureFloorPlan: () => void;
     onStartWithGrid: () => void;
     onStartTutorial: () => void;
     toggleFullscreen: () => void;
@@ -39,8 +41,10 @@ interface WelcomeScreenProps {
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ 
-    onFileChange, onStartWithGrid, onStartTutorial, toggleFullscreen, isFullscreen, onOpenHelp, state, actions
+    onFileChange, onCaptureFloorPlan, onStartWithGrid, onStartTutorial, toggleFullscreen, isFullscreen, onOpenHelp, state, actions
 }) => {
+    const isNativePlatform = Capacitor.isNativePlatform();
+
     return (
         <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 relative overflow-y-auto">
             <div className="bg-gray-900 p-8 rounded-[2.5rem] shadow-2xl max-w-lg w-full text-center relative border border-gray-800 select-none">
@@ -81,15 +85,27 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                         <span className="font-black text-base italic tracking-tighter uppercase">練習モードを開始</span>
                     </button>
 
-                    <label className="block w-full cursor-pointer">
-                        <div className="bg-white text-gray-900 rounded-2xl p-5 flex items-center justify-center gap-4 active:scale-95 shadow-xl transition-all hover:bg-gray-50">
+                    {isNativePlatform ? (
+                        <button
+                            onClick={onCaptureFloorPlan}
+                            className="w-full bg-white text-gray-900 rounded-2xl p-5 flex items-center justify-center gap-4 active:scale-95 shadow-xl transition-all hover:bg-gray-50"
+                        >
                             <CameraIcon className="w-7 h-7 text-red-600" />
                             <span className="font-black text-base text-left leading-tight">
                                 図面を撮影して<br/><span className="text-xs text-gray-500">点検モードを開始</span>
                             </span>
-                            <input type="file" className="hidden" accept="image/*" capture="environment" onChange={onFileChange} />
-                        </div>
-                    </label>
+                        </button>
+                    ) : (
+                        <label className="block w-full cursor-pointer">
+                            <div className="bg-white text-gray-900 rounded-2xl p-5 flex items-center justify-center gap-4 active:scale-95 shadow-xl transition-all hover:bg-gray-50">
+                                <CameraIcon className="w-7 h-7 text-red-600" />
+                                <span className="font-black text-base text-left leading-tight">
+                                    図面を撮影して<br/><span className="text-xs text-gray-500">点検モードを開始</span>
+                                </span>
+                                <input type="file" className="hidden" accept="image/*" capture="environment" onChange={onFileChange} />
+                            </div>
+                        </label>
+                    )}
 
                     <label className="block w-full cursor-pointer">
                         <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5 active:bg-gray-750 flex items-center justify-center gap-4 transition-all hover:border-gray-600">
