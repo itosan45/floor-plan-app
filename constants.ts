@@ -146,6 +146,7 @@ export const MARKER_SORT_ORDER: MarkerType[] = [
 ];
 
 export const APP_INFO = {
-    VERSION: 'v1.6.0',
-    UPDATED_AT: '2025/01/26 12:00'
+    VERSION: 'v1.1.6',
+    UPDATED_AT: '2026/04/16 03:14',
+    RELEASES_API_URL: 'https://api.github.com/repos/itosan45/floor-plan-app/releases/latest'
 };

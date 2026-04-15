@@ -1,6 +1,6 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { Camera } from '@capacitor/camera';
+import { Camera, MediaTypeSelection } from '@capacitor/camera';
 import { useEditorState } from './hooks/useEditorState';
 import { Sidebar } from './components/Sidebar';
 import { EditorCanvas } from './components/EditorCanvas';
@@ -16,7 +16,23 @@ import { resizeImage, loadHtml2Canvas, captureAndGenerateA4 } from './utils/imag
 import { calculateMarkersBoundingBox } from './utils/geometry';
 import { useDrawingInteraction } from './hooks/useDrawingInteraction';
 import { useVoiceInteraction } from './hooks/useVoiceInteraction';
-import { GRID_CELL_COUNT } from './constants';
+import { APP_INFO, GRID_CELL_COUNT } from './constants';
+
+type UpdateInfo = { version: string; downloadUrl: string };
+
+const normalizeVersion = (version: string) => version.replace(/^v/i, '').split('.').map(part => Number.parseInt(part, 10) || 0);
+const isVersionNewer = (candidate: string, current: string) => {
+    const candidateParts = normalizeVersion(candidate);
+    const currentParts = normalizeVersion(current);
+    const maxLength = Math.max(candidateParts.length, currentParts.length);
+    for (let i = 0; i < maxLength; i += 1) {
+        const candidatePart = candidateParts[i] ?? 0;
+        const currentPart = currentParts[i] ?? 0;
+        if (candidatePart > currentPart) return true;
+        if (candidatePart < currentPart) return false;
+    }
+    return false;
+};
 
 export const App: React.FC = () => {
     const { state, actions } = useEditorState();
@@ -27,6 +43,8 @@ export const App: React.FC = () => {
     const [gridDataUrl, setGridDataUrl] = useState('');
     const [showOrientationWarning, setShowOrientationWarning] = useState(false);
     const [tempImageData, setTempImageData] = useState<{ dataUrl: string, blob: Blob } | null>(null);
+    const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+    const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
     const prepareFloorPlanPreview = useCallback(async (blob: Blob) => {
         const extension = blob.type.includes('png') ? 'png' : 'jpg';
@@ -68,6 +86,46 @@ export const App: React.FC = () => {
             }
         }
     }, [actions, prepareFloorPlanPreview]);
+
+    const handlePickFloorPlanFromGallery = useCallback(async () => {
+        try {
+            await Camera.requestPermissions({ permissions: ['photos'] });
+            const result = await Camera.chooseFromGallery({
+                mediaType: MediaTypeSelection.Photo,
+                allowMultipleSelection: false,
+                editable: 'no',
+                quality: 90,
+            });
+
+            const firstResult = result.results[0];
+            const assetUrl = firstResult?.webPath ?? firstResult?.uri;
+            if (!assetUrl) {
+                throw new Error('選択画像の取得に失敗しました');
+            }
+
+            const response = await fetch(assetUrl);
+            if (!response.ok) {
+                throw new Error('選択画像の読み込みに失敗しました');
+            }
+
+            const blob = await response.blob();
+            await prepareFloorPlanPreview(blob);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '';
+            if (!/cancel/i.test(message)) {
+                console.error('Floor plan gallery import error:', error);
+                actions.showStatus('画像の読み込みに失敗しました', 'error');
+            }
+        }
+    }, [actions, prepareFloorPlanPreview]);
+
+    const handleUpdateApp = useCallback(() => {
+        if (!updateInfo?.downloadUrl) return;
+        const opened = window.open(updateInfo.downloadUrl, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+            window.location.href = updateInfo.downloadUrl;
+        }
+    }, [updateInfo]);
 
     const { 
         floorPlanImage, floorPlanRotation, isGridMode, appMode, activeModal, markers,
@@ -131,6 +189,45 @@ export const App: React.FC = () => {
         checkOrientation();
         window.addEventListener('resize', checkOrientation);
         return () => window.removeEventListener('resize', checkOrientation);
+    }, []);
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        const checkForUpdate = async () => {
+            setIsCheckingUpdate(true);
+            try {
+                const response = await fetch(APP_INFO.RELEASES_API_URL, {
+                    headers: { 'User-Agent': 'FloorPlanEditorApp' },
+                });
+                if (!response.ok) return;
+
+                const release = await response.json() as {
+                    tag_name?: string;
+                    assets?: Array<{ browser_download_url?: string; name?: string }>;
+                };
+                const latestVersion = release.tag_name;
+                const apkAsset = release.assets?.find(asset => asset.name?.endsWith('.apk') && asset.browser_download_url);
+
+                if (!isCancelled && latestVersion && apkAsset?.browser_download_url && isVersionNewer(latestVersion, APP_INFO.VERSION)) {
+                    setUpdateInfo({
+                        version: latestVersion,
+                        downloadUrl: apkAsset.browser_download_url,
+                    });
+                }
+            } catch (error) {
+                console.error('Update check failed:', error);
+            } finally {
+                if (!isCancelled) {
+                    setIsCheckingUpdate(false);
+                }
+            }
+        };
+
+        void checkForUpdate();
+        return () => {
+            isCancelled = true;
+        };
     }, []);
 
     const { startVoice, stopVoice, transcript } = useVoiceInteraction({
@@ -235,12 +332,14 @@ export const App: React.FC = () => {
                     actions={actions}
                     onFileChange={async (e) => {
                         const file = e.target.files?.[0];
+                        e.target.value = '';
                         if (!file) return;
                         if (file.name.endsWith('.json')) return actions.importStateFromJson(file);
                         const { dataUrl, blob } = await resizeImage(file);
                         setTempImageData({ dataUrl, blob });
                     }} 
                     onCaptureFloorPlan={() => { void handleCaptureFloorPlan(); }}
+                    onPickFloorPlanFromGallery={() => { void handlePickFloorPlanFromGallery(); }}
                     onStartWithGrid={() => {
                         actions.setIsGridMode(true); actions.setFloorPlanWidth(1200);
                         actions.setFloorPlanAspectRatio(1); actions.setGridSize(1200 / GRID_CELL_COUNT); actions.setWorkflowStep('floor_drafting');
@@ -248,6 +347,9 @@ export const App: React.FC = () => {
                     onStartTutorial={actions.startTutorial}
                     toggleFullscreen={actions.toggleFullscreen} isFullscreen={state.isFullscreen}
                     onOpenHelp={() => actions.setActiveModal('help')}
+                    updateInfo={updateInfo}
+                    onUpdateApp={handleUpdateApp}
+                    isCheckingUpdate={isCheckingUpdate}
                 />
                 {tempImageData && (
                     <ImagePreviewModal 

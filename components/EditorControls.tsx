@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { EditorState, EditorActions } from '../hooks/useEditorState';
 import { 
@@ -31,6 +31,7 @@ export const OrientationWarning: React.FC<OrientationWarningProps> = ({ onForceL
 interface WelcomeScreenProps {
     onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onCaptureFloorPlan: () => void;
+    onPickFloorPlanFromGallery: () => void;
     onStartWithGrid: () => void;
     onStartTutorial: () => void;
     toggleFullscreen: () => void;
@@ -38,12 +39,17 @@ interface WelcomeScreenProps {
     onOpenHelp: () => void;
     state: EditorState;
     actions: EditorActions;
+    updateInfo?: { version: string; downloadUrl: string } | null;
+    onUpdateApp: () => void;
+    isCheckingUpdate?: boolean;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ 
-    onFileChange, onCaptureFloorPlan, onStartWithGrid, onStartTutorial, toggleFullscreen, isFullscreen, onOpenHelp, state, actions
+    onFileChange, onCaptureFloorPlan, onPickFloorPlanFromGallery, onStartWithGrid, onStartTutorial, toggleFullscreen, isFullscreen, onOpenHelp, state, actions, updateInfo, onUpdateApp, isCheckingUpdate = false
 }) => {
     const isNativePlatform = Capacitor.isNativePlatform();
+    const importFileInputRef = useRef<HTMLInputElement>(null);
+    const importJsonInputRef = useRef<HTMLInputElement>(null);
 
     return (
         <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 relative overflow-y-auto">
@@ -56,6 +62,27 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                     <h1 className="text-4xl font-black text-white mb-2 tracking-tighter italic">FLOOR PLAN<br/>EDITOR</h1>
                     <p className="text-gray-500 text-sm font-medium">住宅点検・床下調査報告システム {APP_INFO.VERSION}</p>
                 </div>
+
+                {(updateInfo || isCheckingUpdate) && (
+                    <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-left">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-widest text-emerald-300">Update</p>
+                                <p className="mt-1 text-sm font-bold text-white">
+                                    {updateInfo ? `新しいバージョン ${updateInfo.version} があります` : '更新を確認中です'}
+                                </p>
+                            </div>
+                            {updateInfo && (
+                                <button
+                                    onClick={onUpdateApp}
+                                    className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition-all active:scale-95"
+                                >
+                                    更新
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div className="bg-black/30 p-2 rounded-2xl flex gap-2 mb-8 border border-gray-800">
                     <button 
@@ -107,15 +134,45 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                         </label>
                     )}
 
-                    <label className="block w-full cursor-pointer">
-                        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5 active:bg-gray-750 flex items-center justify-center gap-4 transition-all hover:border-gray-600">
-                            <PhotoIcon className="w-6 h-6 text-indigo-400" />
-                            <span className="text-gray-300 font-bold text-base text-left leading-tight">
-                                データを読み込む<br/><span className="text-xs text-gray-500">JSON / 画像ファイル</span>
-                            </span>
-                            <input type="file" className="hidden" accept="image/*,.json" onChange={onFileChange} />
+                    {isNativePlatform ? (
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={onPickFloorPlanFromGallery}
+                                className="bg-gray-800 border border-gray-700 rounded-2xl p-4 active:bg-gray-750 flex items-center justify-center gap-3 transition-all hover:border-gray-600"
+                            >
+                                <PhotoIcon className="w-6 h-6 text-indigo-400" />
+                                <span className="text-gray-300 font-bold text-sm text-left leading-tight">
+                                    画像を選ぶ<br/><span className="text-[10px] text-gray-500">端末写真</span>
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => importJsonInputRef.current?.click()}
+                                className="bg-gray-800 border border-gray-700 rounded-2xl p-4 active:bg-gray-750 flex items-center justify-center gap-3 transition-all hover:border-gray-600"
+                            >
+                                <PhotoIcon className="w-6 h-6 text-indigo-400" />
+                                <span className="text-gray-300 font-bold text-sm text-left leading-tight">
+                                    JSON読込<br/><span className="text-[10px] text-gray-500">バックアップ</span>
+                                </span>
+                            </button>
+                            <input
+                                ref={importJsonInputRef}
+                                type="file"
+                                className="hidden"
+                                accept=".json,application/json"
+                                onChange={onFileChange}
+                            />
                         </div>
-                    </label>
+                    ) : (
+                        <label className="block w-full cursor-pointer">
+                            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5 active:bg-gray-750 flex items-center justify-center gap-4 transition-all hover:border-gray-600">
+                                <PhotoIcon className="w-6 h-6 text-indigo-400" />
+                                <span className="text-gray-300 font-bold text-base text-left leading-tight">
+                                    データを読み込む<br/><span className="text-xs text-gray-500">JSON / 画像ファイル</span>
+                                </span>
+                                <input ref={importFileInputRef} type="file" className="hidden" accept="image/*,.json" onChange={onFileChange} />
+                            </div>
+                        </label>
+                    )}
 
                     <button 
                         onClick={onStartWithGrid} 
