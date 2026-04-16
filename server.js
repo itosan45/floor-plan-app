@@ -13,7 +13,7 @@ app.use(express.static(path.join(__dirname, 'dist')));
 
 const fallbackLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 60,
+    max: 30,
     standardHeaders: true,
     legacyHeaders: false,
 });
