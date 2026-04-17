@@ -130,11 +130,15 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
             const markerDef = MARKER_DEFINITIONS[activeType];
             
             const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
-            const { x, y } = getSnappedPos(rawX, rawY);
+            const { x, y } = markerDef.shouldSnap
+                ? getSnappedPos(rawX, rawY)
+                : { x: clampPos(rawX), y: clampPos(rawY) };
+
+            const shouldFreePlaceNameMarker = isGridMode && markerDef.category === 'name';
 
             const isDragRequired = 
                 markerDef.interaction === 'line' || markerDef.interaction === 'area' || 
-                markerDef.interaction === 'photo_drag' || (isPhotographyMode && isManualCameraMode);
+                ((markerDef.interaction === 'photo_drag' && !shouldFreePlaceNameMarker) || (isPhotographyMode && isManualCameraMode));
 
             if (isDragRequired) {
                 isInteracting.current = true;
@@ -216,13 +220,15 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
             if (data.mode === 'photo') {
                 const isTextMarker = data.type.startsWith('text_');
                 const rotation = (dist > 5 && !isTextMarker) ? Math.atan2(dy, dx) * (180 / Math.PI) : 0;
+                const shouldDisableRotation = isGridMode && MARKER_DEFINITIONS[data.type].category === 'name';
+                const markerRotation = shouldDisableRotation ? 0 : Math.round(rotation / 5) * 5;
                 
                 if (isPhotographyMode && onPhotoMarkerPlaced) {
                     onPhotoMarkerPlaced({ x: data.startX, y: data.startY, rotation: Math.round(rotation / 5) * 5, length: 1.0 });
                     return true;
                 } else if (data.type.startsWith('text_') || MARKER_DEFINITIONS[data.type].interaction === 'photo_drag') {
                     const newId = generateUniqueId();
-                    addMarker({ id: newId, type: data.type, x: data.startX, y: data.startY, rotation: Math.round(rotation / 5) * 5, length: 1.0 });
+                    addMarker({ id: newId, type: data.type, x: data.startX, y: data.startY, rotation: markerRotation, length: 1.0 });
                     setSelectedMarkerId(newId);
                     return true;
                 }
@@ -248,7 +254,10 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
         if ((toolMode === 'draw' || isPhotographyMode) && !draftingRoom) {
             const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
             const activeType = isPhotographyMode ? 'photo' : currentMarkerType;
-            const { x, y } = getSnappedPos(rawX, rawY);
+            const activeDef = MARKER_DEFINITIONS[activeType];
+            const { x, y } = activeDef.shouldSnap
+                ? getSnappedPos(rawX, rawY)
+                : { x: clampPos(rawX), y: clampPos(rawY) };
 
             if (isPhotographyMode && !isManualCameraMode) {
                 onPhotoMarkerPlaced({ x, y, rotation: 0, length: 1.0 });
