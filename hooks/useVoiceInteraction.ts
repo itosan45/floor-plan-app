@@ -40,6 +40,8 @@ const KEYWORDS = {
     units: ['畳', '帖', '平米', 'メートル']
 };
 
+const MAX_BACKOFF = 10000;
+
 export const useVoiceInteraction = (config: {
     onInspectionResult: (data: { location: string, direction: string, status: string }) => void;
     onDraftingResult: (data: { roomName: string, width: number, height: number }) => void;
@@ -186,8 +188,11 @@ export const useVoiceInteraction = (config: {
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
             const error = event.error;
 
-            // no-speech はエラーとして扱わず、静かに終了させる（onendで再開）
-            if (error === 'no-speech') return;
+            if (error === 'no-speech') {
+                setTranscript('(音声が検出されませんでした)');
+                setTimeout(() => setTranscript(''), 2000);
+                return;
+            }
 
             if (error === 'aborted') {
                 isStartingRef.current = false;
@@ -223,7 +228,10 @@ export const useVoiceInteraction = (config: {
                 // 通常時もモバイルChromeの通知音ループを避けるため最低1.5秒は空ける
                 // エラー回数に応じて待機時間を増やす（バックオフ）
                 const baseWait = sessionDuration < 2000 ? 2500 : 1500;
-                const waitTime = baseWait + (errorCountRef.current * 2000); 
+                const waitTime = Math.min(
+                    baseWait + (errorCountRef.current * 2000),
+                    MAX_BACKOFF
+                );
                 
                 if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
                 

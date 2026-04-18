@@ -67,8 +67,15 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
     };
 
     const getSnappedPos = (rawX: number, rawY: number, roomW?: number, roomH?: number) => {
-        // 安全ガード: キャンバス幅が0の場合は計算をスキップ
-        if (currentCanvasWidth <= 0) return { x: rawX, y: rawY };
+        if (currentCanvasWidth <= 0 || !Number.isFinite(currentCanvasWidth)) {
+            console.warn('Invalid canvas width:', currentCanvasWidth);
+            return { x: 0.5, y: 0.5 };
+        }
+
+        if (logicalHeight <= 0 || !Number.isFinite(logicalHeight)) {
+            console.warn('Invalid logical height:', logicalHeight);
+            return { x: 0.5, y: 0.5 };
+        }
 
         // 0.5グリッド単位のスナップ
         let x = snapToGrid(clampPos(rawX), currentCanvasWidth, gridSize, isGridMode, 2);
@@ -96,58 +103,71 @@ export const useDrawingInteraction = (config: InteractionConfig) => {
         return { x, y };
     };
 
+    const handleRoomPlacement = (e: React.PointerEvent) => {
+        if (!draftingRoom) return;
+        e.preventDefault();
+        const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
+        const { x, y } = getSnappedPos(rawX, rawY, draftingRoom.gridW, draftingRoom.gridH);
+
+        const newId = generateUniqueId();
+        addMarker({
+            id: newId, type: 'room', x, y,
+            gridW: draftingRoom.gridW, gridH: draftingRoom.gridH, text: draftingRoom.label
+        });
+        setSelectedMarkerId(newId);
+        clearPendingRoom();
+        setHoverPos(null);
+    };
+
+    const handlePanStart = (e: React.PointerEvent) => {
+        isPanning.current = true;
+        lastPanPos.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleDrawStart = (e: React.PointerEvent) => {
+        e.preventDefault();
+        setSelectedMarkerId(null);
+        const activeType = isPhotographyMode ? 'photo' : currentMarkerType;
+        const markerDef = MARKER_DEFINITIONS[activeType];
+
+        const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
+        const { x, y } = getSnappedPos(rawX, rawY);
+
+        const isDragRequired =
+            markerDef.interaction === 'line' || markerDef.interaction === 'area' ||
+            markerDef.interaction === 'photo_drag' || (isPhotographyMode && isManualCameraMode);
+
+        if (isDragRequired) {
+            isInteracting.current = true;
+            const mode: 'line' | 'photo' = (markerDef.interaction === 'photo_drag' || (isPhotographyMode && isManualCameraMode)) ? 'photo' : 'line';
+            const newData: DrawingLineInfo = {
+                startX: x, startY: y, currentX: x, currentY: y,
+                type: activeType, mode,
+                number: activeType === 'photo' ? markers.filter(m => m.type === 'photo').length + 1 : undefined
+            };
+            drawingDataRef.current = newData;
+            if (mode === 'photo') setDrawingPhotoMarkerInfo(newData);
+            else setDrawingLineInfo(newData);
+        }
+    };
+
     const handlePointerStart = (e: React.PointerEvent) => {
         activePointers.current.add(e.pointerId);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         startPosRef.current = { x: e.clientX, y: e.clientY };
 
         if (draftingRoom) {
-            e.preventDefault();
-            const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
-            const { x, y } = getSnappedPos(rawX, rawY, draftingRoom.gridW, draftingRoom.gridH);
-
-            const newId = generateUniqueId();
-            addMarker({
-                id: newId, type: 'room', x, y,
-                gridW: draftingRoom.gridW, gridH: draftingRoom.gridH, text: draftingRoom.label
-            });
-            setSelectedMarkerId(newId);
-            clearPendingRoom();
-            setHoverPos(null);
+            handleRoomPlacement(e);
             return;
         }
 
         if (toolMode === 'pan' && !isPhotographyMode) {
-            isPanning.current = true;
-            lastPanPos.current = { x: e.clientX, y: e.clientY };
+            handlePanStart(e);
             return;
         }
 
         if (toolMode === 'draw' || isPhotographyMode) {
-            e.preventDefault();
-            setSelectedMarkerId(null);
-            const activeType = isPhotographyMode ? 'photo' : currentMarkerType;
-            const markerDef = MARKER_DEFINITIONS[activeType];
-            
-            const { x: rawX, y: rawY } = getCanvasCoordinates(e.clientX, e.clientY, floorPlanRef.current);
-            const { x, y } = getSnappedPos(rawX, rawY);
-
-            const isDragRequired = 
-                markerDef.interaction === 'line' || markerDef.interaction === 'area' || 
-                markerDef.interaction === 'photo_drag' || (isPhotographyMode && isManualCameraMode);
-
-            if (isDragRequired) {
-                isInteracting.current = true;
-                const mode: 'line' | 'photo' = (markerDef.interaction === 'photo_drag' || (isPhotographyMode && isManualCameraMode)) ? 'photo' : 'line';
-                const newData: DrawingLineInfo = { 
-                    startX: x, startY: y, currentX: x, currentY: y, 
-                    type: activeType, mode, 
-                    number: activeType === 'photo' ? markers.filter(m => m.type === 'photo').length + 1 : undefined 
-                };
-                drawingDataRef.current = newData;
-                if (mode === 'photo') setDrawingPhotoMarkerInfo(newData);
-                else setDrawingLineInfo(newData);
-            }
+            handleDrawStart(e);
         }
     };
 
