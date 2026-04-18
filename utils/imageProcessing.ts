@@ -1,5 +1,5 @@
 import html2canvas from 'html2canvas';
-import { CAMERA_SETTINGS, EXPORT_SETTINGS, IMAGE_QUALITY } from '../constants';
+import { EXPORT_SETTINGS, IMAGE_QUALITY } from '../constants';
 
 export const loadHtml2Canvas = (): Promise<void> => {
     return Promise.resolve();
@@ -26,7 +26,7 @@ export const resizeImage = (file: File): Promise<{ dataUrl: string, blob: Blob }
       URL.revokeObjectURL(objectUrl);
       
       const canvas = document.createElement('canvas');
-      const maxSize = CAMERA_SETTINGS.MAX_IMAGE_SIZE;
+      const maxSize = 1280;
       let { width, height } = img;
 
       if (width > height) {
