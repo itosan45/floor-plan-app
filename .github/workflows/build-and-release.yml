@@ -1,0 +1,77 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.github/**'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build APK
+        run: cd android && ./gradlew assembleRelease --no-daemon
+
+      - name: Get version from package.json
+        id: version
+        run: echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+
+      - name: Rename APK
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release/floor-plan-editor-v${{ steps.version.outputs.VERSION }}.apk || \
+          cp android/app/build/outputs/apk/release/app-release.apk release/floor-plan-editor-v${{ steps.version.outputs.VERSION }}.apk
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## 📱 floor-plan-editor v${{ steps.version.outputs.VERSION }}
+
+            ### ダウンロード
+            - `floor-plan-editor-v${{ steps.version.outputs.VERSION }}.apk`
+
+            ### インストール方法
+            1. APKファイルをダウンロード
+            2. Androidデバイスにインストール
+            3. 初回起動時に権限を許可
+
+            **変更履歴**: https://github.com/itosan45/floor-plan-app/compare/v${{ steps.version.outputs.VERSION }}
+          files: release/floor-plan-editor-v${{ steps.version.outputs.VERSION }}.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
