@@ -148,6 +148,6 @@ export const MARKER_SORT_ORDER: MarkerType[] = [
 ];
 
 export const APP_INFO = {
-    VERSION: 'v1.6.0',
-    UPDATED_AT: '2025/01/26 12:00'
+    VERSION: 'v1.18',
+    UPDATED_AT: '2026/04/20 12:00'
 };
