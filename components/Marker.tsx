@@ -20,11 +20,19 @@ interface MarkerComponentProps {
 const POINT_BASE_SIZE = 28;
 const LINE_BASE_HEIGHT = 10;
 
+const getFieldModeScale = () => {
+    if (typeof window === 'undefined') return 1.5;
+    const screenWidth = window.innerWidth;
+    if (screenWidth < 768) return 2.0;
+    if (screenWidth < 1024) return 1.75;
+    return 1.5;
+};
+
 const getSize = (scale: number, isGridMode: boolean | undefined, gridSize: number | undefined, basePx: number, previewSize?: number, uiMode?: string) => {
     if (previewSize) return previewSize;
     
     let adjustedBase = basePx;
-    if (uiMode === 'field') adjustedBase *= 1.5;
+    if (uiMode === 'field') adjustedBase *= getFieldModeScale();
 
     if (isGridMode && gridSize) {
         const ratio = adjustedBase / 24; 
@@ -314,7 +322,7 @@ export const MarkerRenderer: React.FC<MarkerComponentProps> = (props) => {
                             lineHeight: 1,
                             transform: 'none',
                             transformOrigin: 'center center',
-                            textShadow: '2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff'
+                            textShadow: '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6), 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff'
                         }}
                     >
                         {MARKER_DEFINITIONS[marker.type].label}

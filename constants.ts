@@ -8,6 +8,29 @@ export type InteractionType = 'point' | 'line' | 'area' | 'photo_drag' | 'room_p
 export const GRID_CELL_COUNT = 50;
 export const BASE_CONTAINER_WIDTH = 752;
 
+export const CAMERA_SETTINGS = {
+    VIDEO_WIDTH: 1920,
+    VIDEO_HEIGHT: 1080,
+    MAX_IMAGE_SIZE: 1600,
+    JPEG_QUALITY: 0.8
+} as const;
+
+export const EXPORT_SETTINGS = {
+    TIMEOUT_MS: 10000,
+    SCALE: 2.0,
+    A4_WIDTH: 3508,
+    A4_HEIGHT: 2480,
+    JPEG_QUALITY: 0.85,
+    PNG_QUALITY: 0.95
+} as const;
+
+export const IMAGE_QUALITY = {
+    THUMBNAIL: 0.5,
+    NORMAL: 0.7,
+    HIGH: 0.85,
+    EXPORT: 0.85
+} as const;
+
 export interface MarkerDef {
     label: string;
     category: MarkerCategory;

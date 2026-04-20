@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Photo } from '../types';
 import { generateUniqueId } from '../utils/common';
 import { XMarkIcon, CameraIcon } from './icons';
+import { CAMERA_SETTINGS } from '../constants';
 
 interface CameraModalProps {
     isOpen: boolean;
@@ -41,8 +42,8 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { 
                     facingMode: 'environment', 
-                    width: { ideal: 1920 }, 
-                    height: { ideal: 1080 } 
+                    width: { ideal: CAMERA_SETTINGS.VIDEO_WIDTH }, 
+                    height: { ideal: CAMERA_SETTINGS.VIDEO_HEIGHT } 
                 },
                 audio: false
             });
@@ -54,7 +55,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             console.error("Camera access error:", err);
             const msg = "カメラの起動に失敗しました。アクセス許可を確認してください。";
             if (onError) onError(msg);
-            else alert(msg);
+            onClose();
         }
     };
 
@@ -63,7 +64,16 @@ export const CameraModal: React.FC<CameraModalProps> = ({
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
     };
+
+    useEffect(() => {
+        return () => {
+            stopCamera();
+        };
+    }, []);
 
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current || isCapturing) return;
@@ -72,7 +82,7 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         const video = videoRef.current;
         const canvas = canvasRef.current;
         
-        const maxSize = 1600; 
+        const maxSize = CAMERA_SETTINGS.MAX_IMAGE_SIZE; 
         let w = video.videoWidth;
         let h = video.videoHeight;
         
@@ -85,30 +95,51 @@ export const CameraModal: React.FC<CameraModalProps> = ({
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+            setIsCapturing(false);
+            return;
+        }
 
         ctx.drawImage(video, 0, 0, w, h);
         
         canvas.toBlob((blob) => {
-            if (!blob) return;
+            if (!blob) {
+                setIsCapturing(false);
+                return;
+            }
 
-            const blobUrl = URL.createObjectURL(blob);
             const label = `${photoCount + 1} 点検箇所`;
+            const reader = new FileReader();
 
-            const newPhoto: Photo = {
-                id: generateUniqueId(),
-                blob: blob,
-                dataUrl: blobUrl,
-                label: label,
-                timestamp: new Date().toLocaleString('ja-JP'),
+            reader.onload = () => {
+                const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+                if (!dataUrl) {
+                    setIsCapturing(false);
+                    return;
+                }
+
+                const newPhoto: Photo = {
+                    id: generateUniqueId(),
+                    blob: blob,
+                    dataUrl,
+                    label: label,
+                    timestamp: new Date().toLocaleString('ja-JP'),
+                };
+
+                onCapture(newPhoto);
+                setIsCapturing(false);
             };
 
-            onCapture(newPhoto);
-            
-            setIsCapturing(false);
-        }, 'image/jpeg', 0.8);
+            reader.onerror = () => {
+                setIsCapturing(false);
+                const msg = "撮影画像の処理に失敗しました。";
+                if (onError) onError(msg);
+            };
 
-    }, [isCapturing, onCapture, photoCount]);
+            reader.readAsDataURL(blob);
+        }, 'image/jpeg', CAMERA_SETTINGS.JPEG_QUALITY);
+
+    }, [isCapturing, onCapture, onError, photoCount]);
 
     if (!isOpen) return null;
 

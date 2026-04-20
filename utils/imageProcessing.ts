@@ -1,7 +1,17 @@
 import html2canvas from 'html2canvas';
+import { EXPORT_SETTINGS, IMAGE_QUALITY } from '../constants';
 
 export const loadHtml2Canvas = (): Promise<void> => {
     return Promise.resolve();
+};
+
+const clearCanvas = (canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    canvas.width = 0;
+    canvas.height = 0;
 };
 
 /**
@@ -16,7 +26,7 @@ export const resizeImage = (file: File): Promise<{ dataUrl: string, blob: Blob }
       URL.revokeObjectURL(objectUrl);
       
       const canvas = document.createElement('canvas');
-      const maxSize = 1280; 
+      const maxSize = 1280;
       let { width, height } = img;
 
       if (width > height) {
@@ -43,11 +53,10 @@ export const resizeImage = (file: File): Promise<{ dataUrl: string, blob: Blob }
       canvas.toBlob((blob) => {
         if (!blob) return reject(new Error('Blob conversion failed'));
         const blobUrl = URL.createObjectURL(blob);
-        canvas.width = 0;
-        canvas.height = 0;
+        clearCanvas(canvas);
         img.src = "";
         resolve({ dataUrl: blobUrl, blob });
-      }, 'image/jpeg', 0.5); 
+      }, 'image/jpeg', IMAGE_QUALITY.NORMAL); 
     };
     
     img.onerror = (err) => {
@@ -80,7 +89,7 @@ export const captureAndGenerateA4 = async (
     let sourceCanvas: HTMLCanvasElement;
     try {
         const capturePromise = html2canvas(element, {
-            scale: 2.0, 
+            scale: EXPORT_SETTINGS.SCALE,
             useCORS: true,
             logging: false,
             backgroundColor: '#ffffff',
@@ -94,7 +103,7 @@ export const captureAndGenerateA4 = async (
 
         // 30秒のタイムアウトを設定
         const timeoutPromise = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Capture timed out')), 30000)
+            setTimeout(() => reject(new Error('出力処理がタイムアウトしました。図面が複雑すぎる可能性があります。')), EXPORT_SETTINGS.TIMEOUT_MS)
         );
 
         sourceCanvas = await Promise.race([capturePromise, timeoutPromise]);
@@ -107,11 +116,11 @@ export const captureAndGenerateA4 = async (
     const isA4Mode = !options?.rawDiagram;
     const extension = options?.format === 'png' ? 'png' : 'jpg';
     const mimeType = options?.format === 'png' ? 'image/png' : 'image/jpeg';
-    const quality = options?.quality || 0.8;
+    const quality = options?.quality || (options?.format === 'png' ? EXPORT_SETTINGS.PNG_QUALITY : EXPORT_SETTINGS.JPEG_QUALITY);
 
     if (isA4Mode) {
-        const a4Width = 3508;
-        const a4Height = 2480;
+        const a4Width = EXPORT_SETTINGS.A4_WIDTH;
+        const a4Height = EXPORT_SETTINGS.A4_HEIGHT;
         const destinationCanvas = document.createElement('canvas');
         destinationCanvas.width = a4Width;
         destinationCanvas.height = a4Height;
@@ -150,10 +159,8 @@ export const captureAndGenerateA4 = async (
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
             }
-            sourceCanvas.width = 0;
-            sourceCanvas.height = 0;
-            destinationCanvas.width = 0;
-            destinationCanvas.height = 0;
+            clearCanvas(sourceCanvas);
+            clearCanvas(destinationCanvas);
         }, mimeType, quality);
     } else {
         // 図面のみモード
@@ -168,8 +175,7 @@ export const captureAndGenerateA4 = async (
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
             }
-            sourceCanvas.width = 0;
-            sourceCanvas.height = 0;
+            clearCanvas(sourceCanvas);
         }, mimeType, quality);
     }
 };
@@ -179,4 +185,3 @@ export type ExportOptions = {
     format?: 'jpg' | 'png';
     quality?: number;
 };
-
