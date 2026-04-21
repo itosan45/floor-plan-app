@@ -15,6 +15,7 @@ interface MarkerComponentProps {
     previewSize?: number;
     isPreview?: boolean;
     uiMode?: 'office' | 'field';
+    edgeBorders?: { top: boolean; right: boolean; bottom: boolean; left: boolean };
 }
 
 const POINT_BASE_SIZE = 28;
@@ -41,13 +42,21 @@ const getMarkerZIndex = (type: MarkerType, isSelected: boolean): number => {
     return 10;
 };
 
-const RoomMarker: React.FC<MarkerComponentProps> = ({ marker, isPreview, uiMode }) => {
+const RoomMarker: React.FC<MarkerComponentProps> = ({ marker, isPreview, uiMode, edgeBorders }) => {
     const fontSize = uiMode === 'field' ? '15px' : '11px';
+    const borderWidth = uiMode === 'field' ? 4 : 2;
+    const roomBorderStyle = isPreview ? undefined : {
+        borderTopWidth: `${edgeBorders?.top === false ? 0 : borderWidth}px`,
+        borderRightWidth: `${edgeBorders?.right === false ? 0 : borderWidth}px`,
+        borderBottomWidth: `${edgeBorders?.bottom === false ? 0 : borderWidth}px`,
+        borderLeftWidth: `${edgeBorders?.left === false ? 0 : borderWidth}px`,
+    };
     return (
         <div 
-            className={`w-full h-full border-2 bg-white shadow-md flex items-center justify-center relative overflow-hidden transition-colors ${isPreview ? 'opacity-50 border-dashed border-indigo-500' : 'border-gray-900 group-hover:border-indigo-500'}`}
+            className={`w-full h-full border-solid bg-white shadow-md flex items-center justify-center relative overflow-hidden transition-colors ${isPreview ? 'opacity-50 border-2 border-dashed border-indigo-500' : 'border-gray-900 group-hover:border-indigo-500'}`}
             style={{ 
                 backgroundColor: isPreview ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.95)',
+                ...roomBorderStyle
             }}
         >
             <div className="font-black text-gray-800 text-center select-none pointer-events-none p-1 break-all leading-tight z-10" style={{ fontSize }}>
@@ -207,7 +216,7 @@ const CrackLineMarker: React.FC<MarkerComponentProps> = ({ marker, scale, isGrid
     );
 };
 
-const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, previewSize, isPreview, uiMode }) => {
+const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, previewSize, isPreview, uiMode, edgeBorders }) => {
     const isImpassable = marker.type === 'impassable_area';
     const isDrilling = marker.type === 'drilling_injection';
     const isAccessOpening = marker.type === 'access_opening';
@@ -225,15 +234,25 @@ const AreaMarker: React.FC<MarkerComponentProps> = ({ marker, previewSize, isPre
     const patternClass = isDrilling ? 'bg-stripe' : isVentilation ? 'bg-mesh' : '';
     const borderClass = isImpassable ? 'border-0' : 'border-2';
 
+    const baseBorderWidth = isImpassable ? 0 : uiMode === 'field' ? 4 : 2;
+    const rectangleEdgeStyle = (!isPreview && marker.type === 'rectangle_outline' && edgeBorders) ? {
+        borderTopWidth: `${edgeBorders.top ? baseBorderWidth : 0}px`,
+        borderRightWidth: `${edgeBorders.right ? baseBorderWidth : 0}px`,
+        borderBottomWidth: `${edgeBorders.bottom ? baseBorderWidth : 0}px`,
+        borderLeftWidth: `${edgeBorders.left ? baseBorderWidth : 0}px`,
+    } : {
+        borderWidth: baseBorderWidth,
+    };
+
     return (
         <div 
             className={`w-full h-full ${patternClass} ${borderClass} ${isPreview ? 'border-dashed border-indigo-500' : ''}`} 
             style={{ 
                 backgroundColor: bgColor,
                 borderColor: isImpassable ? 'transparent' : (marker.color || (isDrilling ? '#3b82f6' : '#000')),
-                borderWidth: isImpassable ? 0 : uiMode === 'field' ? 4 : 2,
                 minHeight: previewSize ? '20px' : 'auto',
-                opacity: isPreview ? 0.7 : 1
+                opacity: isPreview ? 0.7 : 1,
+                ...rectangleEdgeStyle
             }} 
         />
     );
@@ -356,19 +375,68 @@ export const InteractiveMarker: React.FC<{
 
     const left = `${marker.x * 100}%`;
     const top = `${marker.y * 100}%`;
+    const cellRatio = gridSize / containerWidth;
     
     let widthVal = marker.width !== undefined ? `${marker.width * 100}%` : undefined;
     let heightVal = marker.height !== undefined ? `${marker.height * 100}%` : undefined;
+    let markerWidthRatio = marker.width;
+    let markerHeightRatio = marker.height;
 
     if (isGridMode && gridSize && marker.gridW !== undefined && marker.gridH !== undefined) {
-        const cellRatio = gridSize / containerWidth;
         widthVal = `${marker.gridW * cellRatio * 100}%`;
         heightVal = `${marker.gridH * cellRatio * 100}%`;
+        markerWidthRatio = marker.gridW * cellRatio;
+        markerHeightRatio = marker.gridH * cellRatio;
     }
     
     const def = MARKER_DEFINITIONS[marker.type];
     const isLine = def?.interaction === 'line';
     const isArea = marker.width !== undefined || marker.height !== undefined || marker.type === 'room';
+    let edgeBorders: { top: boolean; right: boolean; bottom: boolean; left: boolean } | undefined = undefined;
+
+    if (
+        isGridMode &&
+        markerWidthRatio &&
+        markerHeightRatio &&
+        (marker.type === 'room' || marker.type === 'rectangle_outline')
+    ) {
+        edgeBorders = { top: true, right: true, bottom: true, left: true };
+        const x1 = marker.x;
+        const y1 = marker.y;
+        const x2 = x1 + markerWidthRatio;
+        const y2 = y1 + markerHeightRatio;
+        const epsilon = 1e-6;
+
+        markers.forEach((m: Marker) => {
+            if (m.id === marker.id || m.type !== marker.type) return;
+
+            const otherWidth = (m.type === 'room')
+                ? ((m.gridW ?? 0) * cellRatio)
+                : (m.width ?? 0);
+            const otherHeight = (m.type === 'room')
+                ? ((m.gridH ?? 0) * cellRatio)
+                : (m.height ?? 0);
+
+            if (otherWidth <= 0 || otherHeight <= 0) return;
+
+            const ox1 = m.x;
+            const oy1 = m.y;
+            const ox2 = ox1 + otherWidth;
+            const oy2 = oy1 + otherHeight;
+
+            const overlapY = Math.min(y2, oy2) - Math.max(y1, oy1);
+            if (overlapY > epsilon) {
+                if (Math.abs(x1 - ox2) < epsilon) edgeBorders!.left = false;
+                if (Math.abs(x2 - ox1) < epsilon) edgeBorders!.right = false;
+            }
+
+            const overlapX = Math.min(x2, ox2) - Math.max(x1, ox1);
+            if (overlapX > epsilon) {
+                if (Math.abs(y1 - oy2) < epsilon) edgeBorders!.top = false;
+                if (Math.abs(y2 - oy1) < epsilon) edgeBorders!.bottom = false;
+            }
+        });
+    }
     
     const transformStr = isArea ? 'none' : (isLine ? 'translate(0, -50%)' : 'translate(-50%, -50%)');
     const zIndex = getMarkerZIndex(marker.type, isSelected);
@@ -470,6 +538,7 @@ export const InteractiveMarker: React.FC<{
                 gridSize={gridSize} 
                 isSelected={isSelected} 
                 uiMode={state.uiMode}
+                edgeBorders={edgeBorders}
             />
         </div>
     );
